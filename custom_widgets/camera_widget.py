@@ -3,7 +3,8 @@ from PyQt5.QtGui import QPixmap
 from PyQt5.QtCore import Qt
 from custom_workers.camera_worker import CameraWorker
 from utils import qlabel_to_cv_image
-
+from custom_widgets.camera_feed_editor import CameraFeedDialog
+import cv2 as cv
 class CameraWidget(QWidget):
     running = False
     
@@ -29,12 +30,38 @@ class CameraWidget(QWidget):
         self.camera_worker.image.connect(self.update_image)
 
     def start(self):
-         self.camera_worker.start()
-         CameraWidget.running = True
+        self.camera_worker.start()
+        CameraWidget.running = True
 
-         self.play_button.setText("Stop")
-         self.play_button.clicked.disconnect()
-         self.play_button.clicked.connect(self.closeEvent)    
+        self.play_button.setText("Stop")
+        self.play_button.clicked.disconnect()
+        self.play_button.clicked.connect(self.closeEvent)    
+
+
+    def set_video_source(self, video_source):
+        if self.camera_worker.running:
+            self.camera_worker.running = False
+            self.camera_worker.wait()  # Wait for the thread to finish before changing the video source
+            
+        self.camera_worker.capture.release()  # Release the previous capture
+        self.camera_worker.capture = cv.VideoCapture(video_source)  # Start a new capture with
+        self.camera_worker.running = True
+        self.camera_worker.start()  # Restart the thread with the new video source
+
+    def update_video_source(self):
+
+         # create widget that displays available cameras
+        camera_feed_dialog = CameraFeedDialog(self)
+        
+        camera_feed_dialog.exec_()
+        
+        selected_camera = camera_feed_dialog.feed_option_widget.camera_index
+        
+        # if a camera is selected, set the camera source in the camera widget
+        if selected_camera != -1:
+            if selected_camera != self.camera_worker.camera_index:
+                self.camera_worker.set_camera_index(selected_camera)
+
 
     def update_image(self, q_image):
         pixmap = QPixmap.fromImage(q_image)
