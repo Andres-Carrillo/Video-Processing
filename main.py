@@ -52,15 +52,7 @@ class MainWindow(QMainWindow):
             self.camera_widget.set_video_source(video_file)
 
     def update_camera_source(self):
-        # create widget that displays available cameras
-        camera_feed_dialog = CameraFeedDialog(self)
-        camera_feed_dialog.exec_()
-        selected_camera = camera_feed_dialog.feed_option_widget.camera_index
-        # if a camera is selected, set the camera source in the camera widget
-        if selected_camera != -1:
-            if selected_camera != self._camera_source:
-                self._camera_source = selected_camera
-
+        self.camera_widget.update_video_source()  # Stop the current video source if any
 
 
     def update_upscale_model(self):
