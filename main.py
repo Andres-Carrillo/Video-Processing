@@ -10,6 +10,7 @@ import sys
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+
         self.setWindowTitle("Camera and Output Widget")
 
         
@@ -37,6 +38,8 @@ class MainWindow(QMainWindow):
         
         self.setCentralWidget(container)
 
+        self.camera_widget.camera_worker.image.connect(self.output_widget.worker.process)
+
 
         self.load_video_action.triggered.connect(self.update_video_source)
         self.set_live_camera_action.triggered.connect(self.update_camera_source)
@@ -57,11 +60,29 @@ class MainWindow(QMainWindow):
 
     def update_upscale_model(self):
         pass
+
+
+    def closeEvent(self, event):
+        self.camera_widget.camera_worker.running = False
+        self.camera_widget.camera_worker.wait()  # Wait for the camera worker thread to finish
+        self.camera_widget.camera_worker.stop()  # Stop the camera worker thread
+
+        self.output_widget.worker.wait()  # Wait for the output worker thread to finish
+        self.output_widget.worker.stop_thread()
+        # Signal all threads to stop
+        # # self.stop_event.set()
+        # for worker in self.workers:
+        #     worker.join()  # Wait for threads to finish
+        # event.accept()
         
 
 if __name__ == "__main__":
-
-    app = QApplication(sys.argv)
-    main_window = MainWindow()
-    main_window.show()
-    sys.exit(app.exec_())
+    try:
+        app = QApplication(sys.argv)
+        main_window = MainWindow()
+        main_window.show()
+        sys.exit(app.exec_())
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        main_window.output_widget.worker.video_writer.release()  # Ensure video writer is released
+        sys.exit(1)
