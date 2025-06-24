@@ -1,7 +1,5 @@
-from PyQt5.QtWidgets import QWidget,QFileDialog,QComboBox,QVBoxLayout,QDialog
-from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QWidget,QComboBox,QVBoxLayout,QDialog
 from PyQt5.QtWidgets import QSizePolicy
-import cv2 as cv
 from cv2_enumerate_cameras import enumerate_cameras 
 
 class CameraFeedWidget(QWidget):
