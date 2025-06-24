@@ -5,6 +5,7 @@ from custom_workers.camera_worker import CameraWorker
 from utils import qlabel_to_cv_image
 from custom_widgets.camera_feed_editor import CameraFeedDialog
 import cv2 as cv
+
 class CameraWidget(QWidget):
     running = False
     
