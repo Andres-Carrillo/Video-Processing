@@ -88,7 +88,7 @@ class VideoQueueWorker(QThread):
     pause_processing = pyqtSignal()
     resume_processing = pyqtSignal()
     
-    def __init__(self, batch_size=1,max_queue_size=100):
+    def __init__(self, batch_size=30,max_queue_size=100):
         super().__init__()
         self.queue = queue.Queue(maxsize=max_queue_size)  # Set a maximum size for the queue to avoid memory issues
         self.running = False
@@ -104,27 +104,17 @@ class VideoQueueWorker(QThread):
             if len(self.backlog) > 0:  # If there are frames in the backlog, we try to put them in the queue first
                 backlog_frame = self.backlog.pop(0)
                 self.queue.put(backlog_frame, timeout=1)  # Wait at most one second to put the frame in the queue
-                print(f"Backlog frame added to queue. Backlog size: {len(self.backlog)}")
+   
             else:
                 # If the backlog is empty, we can add the new frame to the queue
                 
                 self.queue.put(frame, timeout=1)  # Wait at most one second to put the frame in the queue
                 self.resume_processing.emit()  # Emit signal to resume processing if the queue was previously full
-                print("Enqueued a new frame into the frame queue. Queue size")
+                
         except queue.Full:
             self.backlog.append(frame)  # If the queue is full, add the frame to the backlog
-            print(f"Queue is full. Frame added to backlog. Backlog size: {len(self.backlog)}")
-            # If the backlog exceeds a certain size, we can emit a signal
-            self.pause_processing.emit()  # Emit signal to pause processing if the queue is full
-        # if self.queue.qsize() == 1 - self.queue.maxsize:
-        #     self.pause_processing.emit()  # Emit signal to pause processing if the queue is about to be full
 
-        # else: # if there is space in the queue, we add the frame to it
-        #     self.queue.put(frame)
-        #     print(f"Enqueued frame. Queue size: {self.queue.qsize()}")
-        #     if self.queue.qsize() < self.queue.maxsize//2: # is the queue is less than half full, we resume processing
-        #         self.resume_processing.emit()
-        
+            self.pause_processing.emit()  # Emit signal to pause processing if the queue is full
 
 
     def run(self):
@@ -133,13 +123,14 @@ class VideoQueueWorker(QThread):
 
         while self.running:
             try:
-                if self.queue.qsize() > 0: # avoid blocking if the queue is empty
-                    frame = self.queue.get(timeout=1)  # Wait at most one second for a frame to be available
-                    batch.append(frame)
-
-                    if len(batch) == self.batch_size:
-                        self.batch_ready.emit(batch)
-                        batch = list()  # Reset the batch after emitting
+                 # avoid blocking if the queue is empty
+                frame = self.queue.get(timeout=1)  # Wait at most one second for a frame to be available
+                batch.append(frame)
+          
+                if len(batch) == self.batch_size:
+                    self.batch_ready.emit(batch)
+    
+                    batch = list()  # Reset the batch after emitting
 
             except queue.Empty: # if no frame is available in the queue then we check if we have a batch to emit
                 if batch:
