@@ -5,10 +5,6 @@ import cv2 as cv
 import time
 import queue
 
-# TODO: batch processing of frames
-#       # wait the needed time to maintain the desired FPS
-#       # However, continue
-
 class CameraWorker(QThread):
     image = pyqtSignal(QImage)
 
@@ -85,7 +81,8 @@ class CameraWorker(QThread):
 # it can be used to process frames in batches or to provide a live feed from a video
 # it emits frames as QImage objects
 # it must take in frames from another thread (e.g. CameraWorker)
-# and emit them to another thread wich processes them (e.g. VideoProcessingWorker)
+
+##TODO: Rewrite thread safety to not reliy on qsize
 class VideoQueueWorker(QThread):
     batch_ready = pyqtSignal(list)
     pause_processing = pyqtSignal()
@@ -96,34 +93,51 @@ class VideoQueueWorker(QThread):
         self.queue = queue.Queue(maxsize=max_queue_size)  # Set a maximum size for the queue to avoid memory issues
         self.running = False
         self.batch_size = batch_size
+        self.backlog = list()  # This will hold frames that were not placed in the queue due to it being full
 
 
     def enqueue_frame(self, frame):
         if not self.running:
             raise RuntimeError("Worker is not running. Start the worker before enqueuing frames.")
 
-        if len(self.queue) == 1 - self.queue.maxsize:
-            self.pause_processing.emit()  # Emit signal to pause processing if the queue is about to be full
+        try:
+            if len(self.backlog) > 0:  # If there are frames in the backlog, we try to put them in the queue first
+                backlog_frame = self.backlog.pop(0)
+                self.queue.put(backlog_frame, timeout=1)  # Wait at most one second to put the frame in the queue
+                print(f"Backlog frame added to queue. Backlog size: {len(self.backlog)}")
+            else:
+                # If the backlog is empty, we can add the new frame to the queue
+                
+                self.queue.put(frame, timeout=1)  # Wait at most one second to put the frame in the queue
+                self.resume_processing.emit()  # Emit signal to resume processing if the queue was previously full
+                print("Enqueued a new frame into the frame queue. Queue size")
+        except queue.Full:
+            self.backlog.append(frame)  # If the queue is full, add the frame to the backlog
+            print(f"Queue is full. Frame added to backlog. Backlog size: {len(self.backlog)}")
+            # If the backlog exceeds a certain size, we can emit a signal
+            self.pause_processing.emit()  # Emit signal to pause processing if the queue is full
+        # if self.queue.qsize() == 1 - self.queue.maxsize:
+        #     self.pause_processing.emit()  # Emit signal to pause processing if the queue is about to be full
 
-        else: # if there is space in the queue, we add the frame to it
-            self.queue.put(frame)
-
-            if self.queue.qsize() < self.queue.maxsize//2: # is the queue is less than half full, we resume processing
-                self.resume_processing.emit()
+        # else: # if there is space in the queue, we add the frame to it
+        #     self.queue.put(frame)
+        #     print(f"Enqueued frame. Queue size: {self.queue.qsize()}")
+        #     if self.queue.qsize() < self.queue.maxsize//2: # is the queue is less than half full, we resume processing
+        #         self.resume_processing.emit()
         
 
 
-    def run(self, batch_size):
+    def run(self):
         self.running = True
         batch = list()
 
         while self.running:
             try:
-                if len(self.queue) > 0: # avoid blocking if the queue is empty
+                if self.queue.qsize() > 0: # avoid blocking if the queue is empty
                     frame = self.queue.get(timeout=1)  # Wait at most one second for a frame to be available
                     batch.append(frame)
 
-                    if len(batch) == batch_size:
+                    if len(batch) == self.batch_size:
                         self.batch_ready.emit(batch)
                         batch = list()  # Reset the batch after emitting
 
