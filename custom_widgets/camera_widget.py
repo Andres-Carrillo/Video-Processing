@@ -54,6 +54,7 @@ class CameraWidget(QWidget):
         self.camera_worker.capture = cv.VideoCapture(video_source)  # Start a new capture with
         self.camera_worker.running = True
         self.camera_worker.start()  # Restart the thread with the new video source
+        self.frame_queue_worker.start()  # Start the frame queue worker
 
     def update_video_source(self):
 
@@ -73,10 +74,11 @@ class CameraWidget(QWidget):
     def update_image(self, q_image):
         pixmap = QPixmap.fromImage(q_image)
         self.image_label.setPixmap(pixmap)
-        
-        if CameraWidget.running:
-            qlabel_to_cv_image(self.image_label)
-            self.frame_queu_worker.add_frame(qlabel_to_cv_image(self.image_label))
+        qlabel_to_cv_image(self.image_label)
+        self.frame_queue_worker.enqueue_frame(qlabel_to_cv_image(self.image_label))
+        # if CameraWidget.running:
+            # qlabel_to_cv_image(self.image_label)
+            # self.frame_queue_worker.enqueue_frame(qlabel_to_cv_image(self.image_label))
 
     def closeEvent(self, event):
         self.camera_worker.stop()
