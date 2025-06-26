@@ -108,7 +108,7 @@ class VideoQueueWorker(QThread):
         else: # if there is space in the queue, we add the frame to it
             self.queue.put(frame)
 
-            if self.queue.qsize() < self.queue.maxsize//2:
+            if self.queue.qsize() < self.queue.maxsize//2: # is the queue is less than half full, we resume processing
                 self.resume_processing.emit()
         
 
