@@ -8,12 +8,14 @@ import queue
 class CameraWorker(QThread):
     image = pyqtSignal(QImage)
 
-    def __init__(self, camera_index=-1,is_live_feed=True,video_path=None):
+    def __init__(self, camera_index=-1,is_live_feed=True,video_path=None,fps=30,limit_fps=True):
         super().__init__()
         self.camera_index = camera_index
         self.running = False
         self.paused = False
         self.capture = None
+        self.limited_fps = limit_fps  # Flag to indicate if FPS limiting is enabled
+        self.fps = fps  # Frames per second limit
         self.live_feed = is_live_feed  # Flag to indicate if the camera feed is live
 
         if not is_live_feed and video_path is not None:
@@ -23,23 +25,30 @@ class CameraWorker(QThread):
     
     def run(self):
         self.running = True
-        
+        prev_time = time.time()
+
         while self.running:
             if not self.paused:
+                # FPS limiting logic
+                if self.limited_fps and self.fps > 0:
+                    current_time = time.time()
+                    elapsed = current_time - prev_time
+                    wait_time = max(0, (1.0 / self.fps) - elapsed)
+                    if wait_time > 0:
+                        self.msleep(int(wait_time * 1000))
+                    prev_time = time.time()
+
                 ret, frame = self.capture.read()
 
                 if ret:
-                # rgb_image = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
                     self.prev = qt_image = cv_image_to_qlabel(frame)
-                    # Emit the processed frame
                     self.image.emit(qt_image)
-            
                 else:
                     break
             else:
+                self.image.emit(self.prev)
+                self.msleep(100)
 
-                self.image.emit(self.prev)  # Emit the last frame while paused
-        
         self.capture.release()
 
     def pause(self):
@@ -113,7 +122,7 @@ class VideoQueueWorker(QThread):
                 
         except queue.Full:
             self.backlog.append(frame)  # If the queue is full, add the frame to the backlog
-
+            print("Queue is full, adding frame to backlog.")
             self.pause_processing.emit()  # Emit signal to pause processing if the queue is full
 
 
