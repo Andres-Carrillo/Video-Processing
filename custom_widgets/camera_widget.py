@@ -23,18 +23,21 @@ class CameraWidget(QWidget):
         self.image_label.setPixmap(blank_canvas)
         
         self.play_button = QPushButton("",clicked=self.start)
-        icon_path = os.path.join(os.path.dirname(__file__), "../play-svgrepo-com.svg")
-        self.play_button.setIcon(QIcon(icon_path))
+        self.play_button.setIcon(QIcon("../icons/play-svgrepo-com.svg"))
 
         self.image_label.setAlignment(Qt.AlignCenter)
 
         self.option_button = QPushButton("", clicked=self.display_options)
-        option_icon_path = os.path.join(os.path.dirname(__file__), "../options-svgrepo-com.svg")
-        self.option_button.setIcon(QIcon(option_icon_path))
+        self.option_button.setIcon(QIcon("../icons/options-svgrepo-com.svg"))
         self.option_button.setMaximumSize(30, 25)
+
+        self.record_button = QPushButton("", clicked=self.start_recording)
+        self.record_button.setIcon(QIcon("../icons/not_recording-filled-alt-svgrepo-com.svg"))
 
         layout.addWidget(self.image_label)
         button_layout.addWidget(self.play_button)
+
+        button_layout.addWidget(self.record_button)
         button_layout.addWidget(self.option_button)
         layout.addLayout(button_layout)
         self.setLayout(layout)
@@ -44,7 +47,6 @@ class CameraWidget(QWidget):
         
         # self.frame_queue_worker = VideoQueueWorker()
 
-
     def start(self):
         self.camera_worker.start()
         # self.frame_queue_worker.start()
@@ -52,7 +54,6 @@ class CameraWidget(QWidget):
         CameraWidget.running = True
 
         self._set_pause_icon()
-
 
     def set_video_source(self, video_source):
         if self.camera_worker.running:
@@ -90,6 +91,20 @@ class CameraWidget(QWidget):
     def display_options(self):
         print("Displaying options dialog")
 
+    # Todo: Set flag in worker to start recording
+    def start_recording(self):
+        self.record_button.setIcon(QIcon("../icons/recording-filled-svgrepo-com.svg"))
+        self.record_button.setToolTip("Recording...")
+        self.record_button.clicked.disconnect()
+        self.record_button.clicked.connect(self.stop_recording)
+        
+
+    #TODO: Set flag in worker to stop recording
+    def stop_recording(self):
+        self.record_button.setIcon(QIcon("../icons/not_recording-filled-alt-svgrepo-com.svg"))
+        self.record_button.setToolTip("Not Recording")
+        self.record_button.clicked.disconnect()
+        self.record_button.clicked.connect(self.start_recording)
 
     def update_image(self, q_image):
         pixmap = QPixmap.fromImage(q_image)
@@ -116,16 +131,14 @@ class CameraWidget(QWidget):
         self._set_pause_icon()
 
 
-
     def _set_pause_icon(self):
-        icon_path = os.path.join(os.path.dirname(__file__), "../pause-1006-svgrepo-com.svg")
-        self.play_button.setIcon(QIcon(icon_path))
+
+        self.play_button.setIcon(QIcon("../icons/pause-1006-svgrepo-com.svg"))
         self.play_button.clicked.disconnect()
         self.play_button.clicked.connect(self.pause)
 
 
     def _set_resume_icon(self):
-        icon_path = os.path.join(os.path.dirname(__file__), "../play-svgrepo-com.svg")
-        self.play_button.setIcon(QIcon(icon_path))
+        self.play_button.setIcon(QIcon("../icons/play-svgrepo-com.svg"))
         self.play_button.clicked.disconnect()
         self.play_button.clicked.connect(self.resume)
