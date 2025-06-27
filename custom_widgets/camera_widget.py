@@ -31,18 +31,18 @@ class CameraWidget(QWidget):
         self.camera_worker = CameraWorker()
         self.camera_worker.image.connect(self.update_image)
         
-        self.frame_queue_worker = VideoQueueWorker()
+        # self.frame_queue_worker = VideoQueueWorker()
 
 
     def start(self):
         self.camera_worker.start()
-        self.frame_queue_worker.start()
+        # self.frame_queue_worker.start()
 
         CameraWidget.running = True
 
-        self.play_button.setText("Stop")
+        self.play_button.setText("Pause")
         self.play_button.clicked.disconnect()
-        self.play_button.clicked.connect(self.closeEvent)    
+        self.play_button.clicked.connect(self.pause)
 
 
     def set_video_source(self, video_source):
@@ -54,7 +54,10 @@ class CameraWidget(QWidget):
         self.camera_worker.capture = cv.VideoCapture(video_source)  # Start a new capture with
         self.camera_worker.running = True
         self.camera_worker.start()  # Restart the thread with the new video source
-        self.frame_queue_worker.start()  # Start the frame queue worker
+        # self.frame_queue_worker.start()  # Start the frame queue worker
+        self.play_button.setText("Pause")
+        self.play_button.clicked.disconnect()
+        self.play_button.clicked.connect(self.pause)
 
     def update_video_source(self):
 
@@ -75,12 +78,28 @@ class CameraWidget(QWidget):
         pixmap = QPixmap.fromImage(q_image)
         self.image_label.setPixmap(pixmap)
         qlabel_to_cv_image(self.image_label)
-        self.frame_queue_worker.enqueue_frame(qlabel_to_cv_image(self.image_label))
+        # self.frame_queue_worker.enqueue_frame(qlabel_to_cv_image(self.image_label))
         # if CameraWidget.running:
             # qlabel_to_cv_image(self.image_label)
             # self.frame_queue_worker.enqueue_frame(qlabel_to_cv_image(self.image_label))
 
     def closeEvent(self, event):
         self.camera_worker.stop()
-        event.accept()
         CameraWidget.running = False
+
+    def pause(self):
+        if self.camera_worker.running:
+            self.camera_worker.pause()
+            self.play_button.setText("Resume")
+            self.play_button.clicked.disconnect()
+            self.play_button.clicked.connect(self.resume)
+
+    def resume(self):
+        if not self.camera_worker.running:
+            self.camera_worker.running = True
+            self.camera_worker.start()
+        else:
+            self.camera_worker.resume()
+        self.play_button.setText("Pause")
+        self.play_button.clicked.disconnect()
+        self.play_button.clicked.connect(self.pause)
