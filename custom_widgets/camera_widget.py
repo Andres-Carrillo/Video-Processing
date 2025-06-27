@@ -5,47 +5,98 @@ from custom_workers.camera_worker import CameraWorker
 from utils import qlabel_to_cv_image
 from custom_widgets.camera_feed_editor import CameraFeedDialog
 from custom_workers.camera_worker import VideoQueueWorker
+from custom_workers.save_video_worker import SaveVideoWorker
+from custom_workers.save_image_worker import SaveImageWorker
+from custom_widgets.camera_mode_widget import CameraModeDialog
 import cv2 as cv
+import enum
+
 import os
+
+class CameraFeedMode(enum.Enum):
+    LIVE_FEED = 0
+    SINGLE_FRAME_CAPTURE = 1
+    REAL_TIME_PROCESSING = 2
+
 class CameraWidget(QWidget):
     running = False
     
-    def __init__(self):
-        super().__init__()
-        
+    def __init__(self,parent=None, mode=CameraFeedMode.LIVE_FEED):
+        super().__init__(parent)
+
+        self.video_writer = None
+        self.image_writer = None
+        self.play_button = None
+        self.record_button = None
+        self.option_button = None
+        self.forward_button = None
+        self.backward_button = None
+        self.image_label = None
+
+        self.mode = mode
+        self._init_ui()
+   
+        self.camera_worker = CameraWorker()
+        self.camera_worker.image.connect(self.update_image)
+         
+
+    def _init_ui(self):
         self.image_label = QLabel()
-        layout = QVBoxLayout()
-        button_layout = QHBoxLayout()
         blank_canvas = QPixmap(640, 480)
         blank_canvas.fill(Qt.black)
         self.image_label.setGeometry(0, 0, 640, 480)
         self.image_label.setScaledContents(True)
         self.image_label.setPixmap(blank_canvas)
-        
+
+        layout = QVBoxLayout()
+        button_layout = QHBoxLayout()
+
+        self.backward_button = QPushButton("", clicked=self.backward_frame)
+        self.backward_button.setIcon(QIcon("../icons/back.svg"))
+        self.backward_button.setToolTip("Previous Frame")
+        button_layout.addWidget(self.backward_button)
+
         self.play_button = QPushButton("",clicked=self.start)
         self.play_button.setIcon(QIcon("../icons/play-svgrepo-com.svg"))
+        self.play_button.setToolTip("Start Video Feed")
+        button_layout.addWidget(self.play_button)
 
         self.image_label.setAlignment(Qt.AlignCenter)
+
+        self.forward_button = QPushButton("", clicked=self.forward_frame)
+        self.forward_button.setIcon(QIcon("../icons/forward-fill-svgrepo-com.svg"))
+        self.forward_button.setToolTip("Next Frame")
+
+        button_layout.addWidget(self.forward_button)
+
+        self.record_button = QPushButton("", clicked=self.start_recording)
+        self.record_button.setIcon(QIcon("../icons/not_recording-filled-alt-svgrepo-com.svg"))
+        self.record_button.setToolTip("Start Recording")
+        button_layout.addWidget(self.record_button)
 
         self.option_button = QPushButton("", clicked=self.display_options)
         self.option_button.setIcon(QIcon("../icons/options-svgrepo-com.svg"))
         self.option_button.setMaximumSize(30, 25)
-
-        self.record_button = QPushButton("", clicked=self.start_recording)
-        self.record_button.setIcon(QIcon("../icons/not_recording-filled-alt-svgrepo-com.svg"))
+        button_layout.addWidget(self.option_button)
 
         layout.addWidget(self.image_label)
-        button_layout.addWidget(self.play_button)
-
-        button_layout.addWidget(self.record_button)
-        button_layout.addWidget(self.option_button)
         layout.addLayout(button_layout)
         self.setLayout(layout)
 
-        self.camera_worker = CameraWorker()
-        self.camera_worker.image.connect(self.update_image)
-        
-        # self.frame_queue_worker = VideoQueueWorker()
+        self.forward_button.setVisible(False)  # Initially hide the forward button
+        self.backward_button.setVisible(False)  # Initially hide the backward button
+
+
+    def swap_ui(self,mode):
+        if mode == CameraFeedMode.LIVE_FEED or mode == CameraFeedMode.REAL_TIME_PROCESSING:
+            self.play_button.setVisible(True)
+            self.forward_button.setVisible(False)
+            self.backward_button.setVisible(False)
+
+        elif mode == CameraFeedMode.SINGLE_FRAME_CAPTURE:
+            self.play_button.setVisible(False)
+            self.forward_button.setVisible(True)
+            self.backward_button.setVisible(True)
 
     def start(self):
         self.camera_worker.start()
@@ -69,12 +120,9 @@ class CameraWidget(QWidget):
         self._set_pause_icon()
 
     def update_video_source(self):
-
          # create widget that displays available cameras
         camera_feed_dialog = CameraFeedDialog(self)
-        
         camera_feed_dialog.exec_()
-        
         selected_camera = camera_feed_dialog.feed_option_widget.camera_index
         
         # if a camera is selected, set the camera source in the camera widget
@@ -82,34 +130,50 @@ class CameraWidget(QWidget):
             if selected_camera != self.camera_worker.camera_index:
                 self.camera_worker.set_camera_index(selected_camera)
 
-
-    # TODO: Add functionality to change the feed mode.
-    #      should allow for continuous feed, single frame capture controlled by user, so each frame can be processed individually
-    #      and a mode that allows for processing of the video feed in real-time.
-    #      The mode can be set in the options dialog.
-    #      The options dialog should also allow for changing the camera source.
     def display_options(self):
-        print("Displaying options dialog")
+        camera_mode_dialog = CameraModeDialog(self)
+        camera_mode_dialog.exec_()
 
-    # Todo: Set flag in worker to start recording
+        mode = camera_mode_dialog.get_selected_mode()
+        mode = CameraFeedMode(mode) if isinstance(mode, int) else mode
+
+        if mode != self.mode:
+            self.swap_ui(mode)
+
+            self.mode = mode
+
     def start_recording(self):
         self.record_button.setIcon(QIcon("../icons/recording-filled-svgrepo-com.svg"))
-        self.record_button.setToolTip("Recording...")
+        self.record_button.setToolTip("Stop Recording")
         self.record_button.clicked.disconnect()
         self.record_button.clicked.connect(self.stop_recording)
-        
+        self.camera_worker.recording = True
+        self.video_writer = SaveVideoWorker(save_path=os.path.join("Video-Super-Resolution/recordings/videos", "recorded_video.mp4"),
+                                             fps=30,
+                                             shape=(640, 480))
+        self.video_writer.start()
 
-    #TODO: Set flag in worker to stop recording
     def stop_recording(self):
         self.record_button.setIcon(QIcon("../icons/not_recording-filled-alt-svgrepo-com.svg"))
-        self.record_button.setToolTip("Not Recording")
+        self.record_button.setToolTip("Stop Recording")
         self.record_button.clicked.disconnect()
         self.record_button.clicked.connect(self.start_recording)
+
+    def start_image_recording(self):
+        self.image_writer = SaveImageWorker(save_path=os.path.join("Video-Super-Resolution/recordings/images"))
+        self.image_writer.start()
 
     def update_image(self, q_image):
         pixmap = QPixmap.fromImage(q_image)
         self.image_label.setPixmap(pixmap)
-        qlabel_to_cv_image(self.image_label)
+
+        if self.video_writer:
+            frame = qlabel_to_cv_image(self.image_label)
+            self.video_writer.add_to_queue(frame)
+
+        if self.image_writer:
+            frame = qlabel_to_cv_image(self.image_label)
+            self.image_writer.add_to_queue(frame, f"frame{self.image_writer.frame_count}.jpg")
 
     def closeEvent(self, event):
         self.camera_worker.stop()
@@ -118,7 +182,6 @@ class CameraWidget(QWidget):
     def pause(self):
         if self.camera_worker.running:
             self.camera_worker.pause()
-
             self._set_resume_icon()
 
     def resume(self):
@@ -130,15 +193,20 @@ class CameraWidget(QWidget):
 
         self._set_pause_icon()
 
-
     def _set_pause_icon(self):
-
         self.play_button.setIcon(QIcon("../icons/pause-1006-svgrepo-com.svg"))
+        self.play_button.setToolTip("Pause Video Feed")
         self.play_button.clicked.disconnect()
         self.play_button.clicked.connect(self.pause)
 
-
     def _set_resume_icon(self):
         self.play_button.setIcon(QIcon("../icons/play-svgrepo-com.svg"))
+        self.play_button.setToolTip("Resume Video Feed")
         self.play_button.clicked.disconnect()
         self.play_button.clicked.connect(self.resume)
+
+    def forward_frame(self):
+        print("would call forward frame in camera worker")
+
+    def backward_frame(self):
+        print("would call backward frame in camera worker")
