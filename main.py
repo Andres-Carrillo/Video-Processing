@@ -38,7 +38,7 @@ class MainWindow(QMainWindow):
         
         self.setCentralWidget(container)
 
-        self.camera_widget.camera_worker.image.connect(self.output_widget.worker.process)
+        # self.camera_widget.camera_worker.image.connect(self.output_widget.worker.process)
 
 
         self.load_video_action.triggered.connect(self.update_video_source)
@@ -62,18 +62,18 @@ class MainWindow(QMainWindow):
         pass
 
 
-    def closeEvent(self, event):
-        self.camera_widget.camera_worker.running = False
-        self.camera_widget.camera_worker.wait()  # Wait for the camera worker thread to finish
-        self.camera_widget.camera_worker.stop()  # Stop the camera worker thread
+    # def closeEvent(self, event):
+    #     self.camera_widget.camera_worker.running = False
+    #     self.camera_widget.camera_worker.wait()  # Wait for the camera worker thread to finish
+    #     self.camera_widget.camera_worker.stop()  # Stop the camera worker thread
 
-        self.output_widget.worker.wait()  # Wait for the output worker thread to finish
-        self.output_widget.worker.stop_thread()
-        # Signal all threads to stop
-        # # self.stop_event.set()
-        # for worker in self.workers:
-        #     worker.join()  # Wait for threads to finish
-        # event.accept()
+    #     self.output_widget.worker.wait()  # Wait for the output worker thread to finish
+    #     self.output_widget.worker.stop_thread()
+    #     # Signal all threads to stop
+    #     # # self.stop_event.set()
+    #     # for worker in self.workers:
+    #     #     worker.join()  # Wait for threads to finish
+    #     # event.accept()
         
 
 if __name__ == "__main__":
