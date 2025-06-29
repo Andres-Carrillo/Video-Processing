@@ -4,9 +4,6 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget,QHBo
 from custom_widgets.camera_feed_editor import CameraFeedDialog
 import sys
 
-
-## TODO: Connect self._camera_source to the camera widget so that it can be updated when the user selects a new camera feed
-
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
