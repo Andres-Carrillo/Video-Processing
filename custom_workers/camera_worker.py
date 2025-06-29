@@ -4,11 +4,18 @@ from utils import cv_image_to_qlabel
 import cv2 as cv
 import time
 import queue
+import enum
+
+class CameraFeedMode(enum.Enum):
+    LIVE_FEED = 0
+    SINGLE_FRAME_CAPTURE = 1
+    REAL_TIME_PROCESSING = 2
+
 
 class CameraWorker(QThread):
     image = pyqtSignal(QImage)
 
-    def __init__(self, camera_index=-1,is_live_feed=True,video_path=None,fps=30,limit_fps=True):
+    def __init__(self, camera_index=-1,video_path=None,fps=30,limit_fps=True,camera_mode=CameraFeedMode.LIVE_FEED):
         super().__init__()
         self.camera_index = camera_index
         self.running = False
@@ -16,13 +23,18 @@ class CameraWorker(QThread):
         self.capture = None
         self.limited_fps = limit_fps  # Flag to indicate if FPS limiting is enabled
         self.fps = fps  # Frames per second limit
-        self.live_feed = is_live_feed  # Flag to indicate if the camera feed is live
+        self.wait_for_next = False  # Flag to indicate if we are waiting for the next frame in single frame mode
+        self.single_frame_mode = False
+        self.prev = None  # To store the previous frame for paused state
 
-        if not is_live_feed and video_path is not None:
+
+        if camera_mode == CameraFeedMode.REAL_TIME_PROCESSING and video_path is not None:
             self.capture = cv.VideoCapture(video_path)
         else:
             self.capture = cv.VideoCapture(self.camera_index)
-    
+            if camera_mode == CameraFeedMode.SINGLE_FRAME_CAPTURE:
+                self.single_frame_mode = True
+
     def run(self):
         self.running = True
         prev_time = time.time()
@@ -56,6 +68,11 @@ class CameraWorker(QThread):
 
     def resume(self):
         self.paused = False
+
+
+    def toggle_single_frame_mode(self, enable):
+        print(f"Toggling single frame mode to {enable}")
+        self.single_frame_mode = enable
 
     def set_video_path(self, video_path):
         if self.running:
