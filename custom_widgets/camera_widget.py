@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import QVBoxLayout, QPushButton, QWidget,QLabel,QHBoxLayout
 from PyQt5.QtGui import QPixmap,QIcon
 from PyQt5.QtCore import Qt
-from custom_workers.camera_worker import CameraWorker
+from custom_workers.camera_worker import CameraWorker, CameraFeedMode
 from utils import qlabel_to_cv_image
 from custom_widgets.camera_feed_editor import CameraFeedDialog
 from custom_workers.camera_worker import VideoQueueWorker
@@ -13,10 +13,6 @@ import enum
 
 import os
 
-class CameraFeedMode(enum.Enum):
-    LIVE_FEED = 0
-    SINGLE_FRAME_CAPTURE = 1
-    REAL_TIME_PROCESSING = 2
 
 class CameraWidget(QWidget):
     running = False
@@ -92,11 +88,13 @@ class CameraWidget(QWidget):
             self.play_button.setVisible(True)
             self.forward_button.setVisible(False)
             self.backward_button.setVisible(False)
+            self.camera_worker.toggle_single_frame_mode(False)  # Disable single frame mode in the worker
 
         elif mode == CameraFeedMode.SINGLE_FRAME_CAPTURE:
             self.play_button.setVisible(False)
             self.forward_button.setVisible(True)
             self.backward_button.setVisible(True)
+            self.camera_worker.toggle_single_frame_mode(True)  # Toggle single frame mode in the worker
 
     def start(self):
         self.camera_worker.start()
@@ -164,6 +162,8 @@ class CameraWidget(QWidget):
         self.image_writer.start()
 
     def update_image(self, q_image):
+     
+
         pixmap = QPixmap.fromImage(q_image)
         self.image_label.setPixmap(pixmap)
 
@@ -174,6 +174,9 @@ class CameraWidget(QWidget):
         if self.image_writer:
             frame = qlabel_to_cv_image(self.image_label)
             self.image_writer.add_to_queue(frame, f"frame{self.image_writer.frame_count}.jpg")
+
+        if self.camera_worker.single_frame_mode and not self.camera_worker.paused:
+            self.camera_worker.pause()
 
     def closeEvent(self, event):
         self.camera_worker.stop()
@@ -206,7 +209,7 @@ class CameraWidget(QWidget):
         self.play_button.clicked.connect(self.resume)
 
     def forward_frame(self):
-        print("would call forward frame in camera worker")
+        self.camera_worker.resume()
 
     def backward_frame(self):
         print("would call backward frame in camera worker")
