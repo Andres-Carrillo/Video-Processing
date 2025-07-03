@@ -1,8 +1,42 @@
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt,pyqtSlot
 from PyQt5.QtGui import  QPixmap
 from PyQt5.QtWidgets import QWidget, QLabel,QGridLayout,QComboBox
 from custom_workers.yolo_worker import YOLOWorker
+import cv2 as cv
+from utils import qimage_to_cv_image, cv_image_to_qimage,COCO_CLASSES, COCO_COLOR_LIST
 
+def get_class_name(class_id):
+    return COCO_CLASSES.get(class_id, "Unknown")
+
+
+def get_class_color(class_id):
+    """
+    Get the color for a given class ID.
+    This function can be modified to return different colors based on the class ID.
+    """    
+    return COCO_COLOR_LIST.get(class_id, (255, 255, 255))  # Default to white if class_id not found
+
+
+def inpaint_yolo_results(results):
+    image = results[-1]  
+
+    detection_count = len(results) - 1  # Exclude the last item which is the image
+    
+    for i in range(detection_count):# 
+        detection = results[i]
+        if isinstance(detection, tuple) and len(detection) == 3:
+            box, score, class_id = detection
+            x, y, w, h = box
+            # Draw a rectangle around the detected object
+            cv.rectangle(image, (x, y), (x + w, y + h), get_class_color(class_id), 2)
+            # Optionally add text for class_id and score
+            cv.putText(image, f'ID: {get_class_name(class_id)}, Score: {score:.2f}', (x, y - 10), cv.FONT_HERSHEY_SIMPLEX, 0.5, get_class_color(class_id), 1)
+
+
+    # Convert the processed image back to QPixmap
+    processed_image = cv_image_to_qimage(image)
+    
+    return processed_image  # Return the processed image
 class YoloOutputWidget(QWidget):
     def __init__(self,parent,fixed_size=False,size=(640,600)):
         super().__init__(parent)
@@ -25,20 +59,29 @@ class YoloOutputWidget(QWidget):
             self.setFixedSize(size[0], size[1])
 
     def _init_worker(self):
-        self.worker = YOLOWorker(model_path="yolov8n.onnx", input_size=640, conf_threshold=0.5, iou_threshold=0.4)
-        self.worker.results.connect(self.update_canvas)
-        self.worker.start()
+        self.model_worker = YOLOWorker(model_path="model_zoo/yolo8.onnx", input_size=640, conf_threshold=0.5, iou_threshold=0.4)
+        self.model_worker.results.connect(self.update_canvas)
+        self.model_worker.start()
 
+    @pyqtSlot(object)
     def update_canvas(self, data):
         if data is not None:
             print("Updating canvas with new data")
             print(f"Data type: {type(data)}")
             #convert the data to QPixmap if it is not already
-            if not isinstance(data, QPixmap):
+
+
+            if not isinstance(data, list):
+                print("Incorrect data type received, expected list of detections")
+                #set the canvas to black if data is not a list
+                self.canvas.fill(Qt.black)
+            elif len(data) > 0 and isinstance(data[-1], QPixmap):
                 print("Converting data to QPixmap")
-                data = QPixmap.fromImage(data)
-            else:
-                print("Data is already a QPixmap")
-            self.canvas = data
-            self.label.setPixmap(self.canvas)
-            self.label.repaint()
+                # If the last item in the list is a QPixmap, use it
+                data = data[-1]
+
+                data = inpaint_yolo_results(data)
+                data = QPixmap.fromImage(data) if not isinstance(data, QPixmap) else data
+
+                self.label.setPixmap(data)
+                self.label.repaint()
