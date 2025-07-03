@@ -107,6 +107,7 @@ class YOLOWorker(QThread):
 
                     # Convert QImage to numpy array
                     image = qimage_to_cv_image(data)
+                    output_image =image.copy()  # Keep a copy of the original image for output
 
                     # Check if the image is valid
                     if image is None:
@@ -126,6 +127,8 @@ class YOLOWorker(QThread):
                     # Postprocess the detections
                     detections = postprocess_detections(outputs[0], self.input_size, self.conf_threshold, self.iou_threshold)
                     
+                    # add output image to end of detections
+                    detections.append(output_image)
                     # Emit the results
                     self.results.emit(detections)
 
