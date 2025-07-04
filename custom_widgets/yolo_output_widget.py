@@ -20,7 +20,6 @@ def get_class_color(class_id):
 
 def inpaint_yolo_results(results):
 
-    print("Processing YOLO results for inpainting...")
     image = results[-1]  
 
     detection_count = len(results) - 1  # Exclude the last item which is the image
@@ -40,6 +39,10 @@ def inpaint_yolo_results(results):
     processed_image = cv_image_to_qimage(image)
     
     return processed_image  # Return the processed image
+
+
+
+# TODO: Add setting button to change model path, input size, confidence threshold, and IOU threshold, also model mode (detection, segmentation, etc.)
 class YoloOutputWidget(QWidget):
     def __init__(self,parent,fixed_size=False,size=(640,600)):
         super().__init__(parent)
@@ -72,29 +75,12 @@ class YoloOutputWidget(QWidget):
 
     @pyqtSlot(list)
     def update_canvas(self, data):
-        start = time.perf_counter()
-        if data is not None:
-            # print("Updating canvas with new data")
-            # print(f"Data type: {type(data)}")
-            #convert the data to QPixmap if it is not already
-
-            # print("the last item is of type:", type(data[-1]) if len(data) > 0 else "N/A")
-
             if not isinstance(data, list):
-                print("Incorrect data type received, expected list of detections")
                 #set the canvas to black if data is not a list
                 self.canvas.fill(Qt.black)
             elif len(data) > 0:
-                # print("Converting data to QPixmap")
-                # If the last item in the list is a QPixmap, use it
-                # data = data[-1]
-
-                # cv.imwrite("yolo_output_image.jpg", data[-1])
-
                 data = inpaint_yolo_results(data)
                 data = QPixmap.fromImage(data) if not isinstance(data, QPixmap) else data
 
                 self.label.setPixmap(data)
                 self.label.repaint()
-                end = time.perf_counter()
-                print(f"Canvas updated in {end - start:.4f} seconds")
