@@ -109,7 +109,7 @@ class YOLOWorker(QThread):
                     if self.processing_list.empty() or self.paused:
                         self.msleep(100)
                         continue
-
+   
                     # Get the next frame from the processing list
                     data = self.processing_list.get()
 
@@ -140,15 +140,16 @@ class YOLOWorker(QThread):
                         print(f"Error during model inference: {e}")
                         self.results.emit([])
                         continue
+
                     # Postprocess the detections
                     detections = postprocess_detections(output, self.input_size, self.conf_threshold, self.iou_threshold)
                     
                     # add output image to end of detections
                     detections.append(output_image)
 
-                    # cv.imwrite("output_image.jpg", output_image)  # Save output image for debugging
                     # Emit the results
                     self.results.emit(detections)
+
 
         def stop_thread(self):
             """
