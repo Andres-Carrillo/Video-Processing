@@ -2,6 +2,7 @@ from custom_widgets.camera_widget import CameraWidget
 from custom_widgets.output_widget import OutputWidget
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget,QHBoxLayout,QAction,QFileDialog
 from custom_widgets.camera_feed_editor import CameraFeedDialog
+from custom_widgets.yolo_output_widget import YoloOutputWidget
 import sys
 
 class MainWindow(QMainWindow):
@@ -24,18 +25,21 @@ class MainWindow(QMainWindow):
 
         edit_menu.addAction(self.change_upscale_model_action)
         self.camera_widget = CameraWidget()
-        self.output_widget = OutputWidget(self)
-        
+        # self.output_widget = OutputWidget(self)
+        self.yolo_output_widget = YoloOutputWidget(self)
+
         layout = QHBoxLayout()
         layout.addWidget(self.camera_widget)
-        layout.addWidget(self.output_widget)
-        
+        # layout.addWidget(self.output_widget)
+        layout.addWidget(self.yolo_output_widget)
+
         container = QWidget()
         container.setLayout(layout)
         
         self.setCentralWidget(container)
 
         # self.camera_widget.camera_worker.image.connect(self.output_widget.worker.process)
+        self.camera_widget.camera_worker.image.connect(self.yolo_output_widget.model_worker.processing_list.put)
 
 
         self.load_video_action.triggered.connect(self.update_video_source)
@@ -43,6 +47,8 @@ class MainWindow(QMainWindow):
         self.change_upscale_model_action.triggered.connect(self.update_upscale_model)
 
         self._camera_source = -1  # Default value for camera source
+
+        self.yolo_output_widget.start_worker()  # Start the YOLO worker thread
 
 
     def update_video_source(self):
@@ -81,5 +87,5 @@ if __name__ == "__main__":
         sys.exit(app.exec_())
     except Exception as e:
         print(f"An error occurred: {e}")
-        main_window.output_widget.worker.video_writer.release()  # Ensure video writer is released
+        # main_window.output_widget.worker.video_writer.release()  # Ensure video writer is released
         sys.exit(1)
