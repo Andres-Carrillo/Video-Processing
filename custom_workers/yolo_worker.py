@@ -13,10 +13,12 @@ def preprocess_image(image, input_size):
     """
     # Resize the image to the input size
     resized_image = cv.resize(image, (input_size, input_size))
+    resized_image = cv.cvtColor(resized_image, cv.COLOR_BGR2RGB)  # Convert BGR to RGB
     
     # Normalize the image
     normalized_image = resized_image.astype(np.float32) / 255.0
 
+    cv.imwrite("preprocessed_image.jpg", normalized_image*255)  # Save preprocessed image for debugging
     normalized_image = np.transpose(normalized_image, (2, 0, 1))  # Change to CHW format
     normalized_image = np.expand_dims(normalized_image, axis=0)  # Add batch dimension
 
@@ -33,34 +35,43 @@ def apply_nms(boxes, scores, iou_threshold):
     return indices.flatten() if len(indices) > 0 else []
 
 
-def postprocess_detections(detections, input_size, conf_threshold=0.5, iou_threshold=0.4):
+def postprocess_detections(detections, input_size, class_confidence_threshold = 0.5,obj_conf_threshold=0.2, iou_threshold=0.4):
     """
     Postprocess the raw detections from the YOLO model.
     """
-    boxes, scores, class_ids = [], [], []
+
+    boxes = detections[:4, :].T # Assuming the first 4 rows are x_center, y_center, width, height
+    scores = detections[4:, :].T  # shape: (8400, 80)  # Assuming the 5th row is the confidence score
     
-    for detection in detections:
-        # Extract bounding box coordinates and confidence score
-        x_center, y_center, width, height, conf = detection[:5]
-        
-        if conf < conf_threshold:
+    detection_count = scores.shape[0]  # Number of detections
+
+    normalized_boxes = []
+    class_ids = []
+    confidence_scores = []
+    results = []
+
+    for i in range(detection_count):
+        class_id = np.argmax(scores[i])
+        confidence = scores[i][class_id]  # Get the confidence score for the class with the highest score
+        if confidence < class_confidence_threshold:
             continue
-        
-        # Convert center coordinates to top-left corner coordinates
-        x1 = int((x_center - width / 2) * input_size)
-        y1 = int((y_center - height / 2) * input_size)
-        x2 = int((x_center + width / 2) * input_size)
-        y2 = int((y_center + height / 2) * input_size)
-        
-        boxes.append([x1, y1, x2 - x1, y2 - y1])  # [x, y, width, height]
-        scores.append(float(conf))
-        class_ids.append(int(detection[5]))  # Assuming class ID is at index 5
-    
-    indices = apply_nms(boxes, scores, iou_threshold)
-    
-    return [(boxes[i], scores[i], class_ids[i]) for i in indices]
+
+        x,y,w,h = boxes[i]
+        x1 = int(x -w / 2)
+        y1 = int(y - h / 2)
+        x2 = int(x + w / 2)
+        y2 = int(y + h / 2)
+  
+        normalized_boxes.append([x1, y1, x2, y2])  # Append the bounding box coordinates
+        class_ids.append(class_id)
+        confidence_scores.append(confidence)
 
 
+    #apply NMS to filter out overlapping boxes
+    indices = apply_nms(normalized_boxes, confidence_scores, iou_threshold)
+
+    # return the filtered detections
+    return [[normalized_boxes[i], confidence_scores[i], class_ids[i]] for i in indices]
 
 class YOLOWorker(QThread):
         results = pyqtSignal(list)
@@ -116,19 +127,26 @@ class YOLOWorker(QThread):
 
                     # Preprocess the image
                     preprocessed_image = preprocess_image(image, self.input_size)
+
+                   
                     
                     try:
                         # Run inference
+
                         outputs = self.session.run(None, {self.input_name: preprocessed_image})
+                        output = outputs[0]  # Assuming the model outputs a single tensor
+                        output = np.squeeze(output)  # Remove batch dimension
                     except Exception as e:
                         print(f"Error during model inference: {e}")
                         self.results.emit([])
                         continue
                     # Postprocess the detections
-                    detections = postprocess_detections(outputs[0], self.input_size, self.conf_threshold, self.iou_threshold)
+                    detections = postprocess_detections(output, self.input_size, self.conf_threshold, self.iou_threshold)
                     
                     # add output image to end of detections
                     detections.append(output_image)
+
+                    # cv.imwrite("output_image.jpg", output_image)  # Save output image for debugging
                     # Emit the results
                     self.results.emit(detections)
 
