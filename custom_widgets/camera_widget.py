@@ -11,6 +11,7 @@ from custom_widgets.camera_mode_widget import CameraModeDialog
 import cv2 as cv
 import enum
 
+from custom_workers.onnx_video_worker import VideoONNXWorker
 import os
 
 
@@ -32,7 +33,7 @@ class CameraWidget(QWidget):
         self.mode = mode
         self._init_ui()
    
-        self.camera_worker = CameraWorker()
+        self.camera_worker = VideoONNXWorker()
         self.camera_worker.image.connect(self.update_image)
          
 
