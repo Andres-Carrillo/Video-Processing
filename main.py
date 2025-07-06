@@ -26,12 +26,12 @@ class MainWindow(QMainWindow):
         edit_menu.addAction(self.change_upscale_model_action)
         self.camera_widget = CameraWidget()
         # self.output_widget = OutputWidget(self)
-        self.yolo_output_widget = YoloOutputWidget(self)
+        # self.yolo_output_widget = YoloOutputWidget(self)
 
         layout = QHBoxLayout()
         layout.addWidget(self.camera_widget)
         # layout.addWidget(self.output_widget)
-        layout.addWidget(self.yolo_output_widget)
+        # layout.addWidget(self.yolo_output_widget)
 
         container = QWidget()
         container.setLayout(layout)
@@ -39,7 +39,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(container)
 
         # self.camera_widget.camera_worker.image.connect(self.output_widget.worker.process)
-        self.camera_widget.camera_worker.image.connect(self.yolo_output_widget.model_worker.processing_list.put)
+        # self.camera_widget.camera_worker.image.connect(self.yolo_output_widget.model_worker.processing_list.put)
 
 
         self.load_video_action.triggered.connect(self.update_video_source)
@@ -48,7 +48,7 @@ class MainWindow(QMainWindow):
 
         self._camera_source = -1  # Default value for camera source
 
-        self.yolo_output_widget.start_worker()  # Start the YOLO worker thread
+        # self.yolo_output_widget.start_worker()  # Start the YOLO worker thread
 
 
     def update_video_source(self):
