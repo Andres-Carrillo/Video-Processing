@@ -23,6 +23,7 @@ def inpaint_yolo_results(results):
     image = results[-1]  
 
     detection_count = len(results) - 1  # Exclude the last item which is the image
+    # image = cv.cvtColor(image, cv.COLOR_BGR2RGB)  # Convert BGR to RGB for display
 
     for i in range(detection_count):# 
         detection = results[i]
@@ -37,6 +38,8 @@ def inpaint_yolo_results(results):
 
     # Convert the processed image back to QPixmap
     processed_image = cv_image_to_qimage(image)
+
+   
     
     return processed_image  # Return the processed image
 
@@ -84,3 +87,7 @@ class YoloOutputWidget(QWidget):
 
                 self.label.setPixmap(data)
                 self.label.repaint()
+                print("returning processed image")
+
+            else:
+                print("No data received or empty list")
