@@ -20,7 +20,6 @@ class BaseImageWorker(QThread):
         else:
             self.processed.emit(self.data)
         
-        self.finished.emit()
 
     def process_data(self, data):
         self.data = data
