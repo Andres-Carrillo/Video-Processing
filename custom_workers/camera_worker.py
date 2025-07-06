@@ -40,7 +40,9 @@ class CameraWorker(QThread):
         prev_time = time.time()
 
         while self.running:
+            
             if not self.paused:
+                start = time.perf_counter()
                 # FPS limiting logic
                 if self.limited_fps and self.fps > 0:
                     current_time = time.time()
@@ -55,6 +57,8 @@ class CameraWorker(QThread):
                 if ret:
                     self.prev = qt_image = cv_image_to_qlabel(frame)
                     self.image.emit(qt_image)
+                    end = time.perf_counter()
+                    print(f"Frame processed in {end - start:.4f} seconds that is {1 / (end - start):.2f} FPS")
                 else:
                     break
             else:
