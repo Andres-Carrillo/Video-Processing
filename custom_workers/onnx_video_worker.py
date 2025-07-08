@@ -122,7 +122,7 @@ def inpaint_yolo_results(results):
 class VideoONNXWorker(QThread):
     image = pyqtSignal(QImage)
 
-    def __init__(self,video_source=-1,model_source='model_zoo/yolov8n.onnx',fps=30,limit_fps=True,model_confidence_threshold=0.5, iou_threshold=0.4,
+    def __init__(self,video_source=-1,model_source='model_zoo/yolov8n_det.onnx',fps=30,limit_fps=True,model_confidence_threshold=0.5, iou_threshold=0.4,
                  provider = 'CUDAExecutionProvider' if 'CUDAExecutionProvider' in providers else 'CPUExecutionProvider' ):
         super().__init__()
 
@@ -197,6 +197,7 @@ class VideoONNXWorker(QThread):
                         qt_image = cv_image_to_qlabel(output_image)
 
                         self.image.emit(qt_image)
+                        print(f"Frame processed in {time.perf_counter() - start:.4f} seconds that is {1 / (time.perf_counter() - start):.2f} FPS")
                     except Exception as e:
                         print(f"Error during model inference: {e}")
                         output_image = cv_image_to_qlabel(output_image)
