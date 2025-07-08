@@ -14,7 +14,6 @@ import enum
 from custom_workers.onnx_video_worker import VideoONNXWorker
 import os
 
-
 class CameraWidget(QWidget):
     running = False
     
