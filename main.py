@@ -3,6 +3,7 @@ from custom_widgets.output_widget import OutputWidget
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget,QHBoxLayout,QAction,QFileDialog
 from custom_widgets.camera_feed_editor import CameraFeedDialog
 from custom_widgets.yolo_output_widget import YoloOutputWidget
+from custom_widgets.mode_settings_editor import ModeSettingsEditor
 import sys
 
 class MainWindow(QMainWindow):
@@ -18,12 +19,16 @@ class MainWindow(QMainWindow):
         self.load_video_action = QAction("Load Video", self)
         self.set_live_camera_action = QAction("Change Live Source", self)
 
-        self.change_upscale_model_action = QAction("Change Upscale Model", self)
+        self.change_model_action = QAction("Change Model", self)
+        self.edit_model_settings_action = QAction("Edit Model Settings", self)
+
 
         file_menu.addAction(self.load_video_action)
         file_menu.addAction(self.set_live_camera_action)
 
-        edit_menu.addAction(self.change_upscale_model_action)
+        edit_menu.addAction(self.change_model_action)
+        edit_menu.addAction(self.edit_model_settings_action)
+        # model_menu.addAction(self.change_deep_learning_model_action)
         self.camera_widget = CameraWidget()
         # self.output_widget = OutputWidget(self)
         # self.yolo_output_widget = YoloOutputWidget(self)
@@ -44,7 +49,8 @@ class MainWindow(QMainWindow):
 
         self.load_video_action.triggered.connect(self.update_video_source)
         self.set_live_camera_action.triggered.connect(self.update_camera_source)
-        self.change_upscale_model_action.triggered.connect(self.update_upscale_model)
+        self.change_model_action.triggered.connect(self.change_model)
+        self.edit_model_settings_action.triggered.connect(self.edit_model_settings)
 
         self._camera_source = -1  # Default value for camera source
 
@@ -61,9 +67,13 @@ class MainWindow(QMainWindow):
         self.camera_widget.update_video_source()  # Stop the current video source if any
 
 
-    def update_upscale_model(self):
+    def change_model(self):
         pass
 
+    def edit_model_settings(self):
+        # Open a dialog to edit model settings
+        dialog = ModeSettingsEditor(self)
+        dialog.exec_()
 
     # def closeEvent(self, event):
     #     self.camera_widget.camera_worker.running = False
