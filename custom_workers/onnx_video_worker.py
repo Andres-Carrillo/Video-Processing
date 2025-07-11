@@ -1,18 +1,17 @@
 import cv2 as cv
 import onnxruntime as ort
 import numpy as np
-from PyQt5.QtCore import  QThread, pyqtSignal,pyqtSlot
+from PyQt5.QtCore import  QThread, pyqtSignal
 from PyQt5.QtGui import QImage
-from utils import qimage_to_cv_image, cv_image_to_qimage, cv_image_to_qlabel,COCO_CLASSES, COCO_COLOR_LIST
+from utils import cv_image_to_qlabel,COCO_CLASSES, COCO_COLOR_LIST
 from custom_workers.camera_worker import CameraFeedMode
-
+import enum
 import time
 
 providers = ort.get_available_providers()
 
 def get_class_name(class_id):
     return COCO_CLASSES.get(class_id, "Unknown")
-
 
 def get_class_color(class_id):
     """
@@ -21,7 +20,7 @@ def get_class_color(class_id):
     """    
     return COCO_COLOR_LIST.get(class_id, (255, 255, 255))  # Default to white if class_id not found
 
-def preprocess_image(image, input_size):
+def preprocess_image_yolo8(image, input_size):
     """
     Preprocess the image for YOLO model input.
     """
@@ -44,8 +43,7 @@ def preprocess_image(image, input_size):
 
     return normalized_image
 
-
-def apply_nms(boxes, scores, iou_threshold):
+def apply_nms_yolo8(boxes, scores, iou_threshold):
     """
     Apply Non-Maximum Suppression (NMS) to filter out overlapping boxes.
     """
@@ -53,8 +51,7 @@ def apply_nms(boxes, scores, iou_threshold):
     
     return indices.flatten() if len(indices) > 0 else []
 
-
-def postprocess_detections(detections, class_confidence_threshold = 0.5, iou_threshold=0.4):
+def postprocess_detections_yolo8(detections, class_confidence_threshold = 0.5, iou_threshold=0.4):
     """
     Postprocess the raw detections from the YOLO model.
     """
@@ -85,15 +82,13 @@ def postprocess_detections(detections, class_confidence_threshold = 0.5, iou_thr
         class_ids.append(class_id)
         confidence_scores.append(confidence)
 
-
     #apply NMS to filter out overlapping boxes
-    indices = apply_nms(normalized_boxes, confidence_scores, iou_threshold)
+    indices = apply_nms_yolo8(normalized_boxes, confidence_scores, iou_threshold)
 
     # return the filtered detections
     return [[normalized_boxes[i], confidence_scores[i], class_ids[i]] for i in indices]
 
-
-def inpaint_yolo_results(results):
+def inpaint_yolo_results_yolo8(results):
 
     image = results[-1]  
 
@@ -109,27 +104,34 @@ def inpaint_yolo_results(results):
         cv.rectangle(image, (x, y), (x + w, y + h), get_class_color(class_id), 2)
         # Optionally add text for class_id and score
         cv.putText(image, f'ID: {get_class_name(class_id)}, Score: {score:.4f}', (x, y - 10), cv.FONT_HERSHEY_SIMPLEX, 0.5, get_class_color(class_id), 1)
-
-
-    # Convert the processed image back to QPixmap
-    # processed_image = cv_image_to_qimage(image)
-
-   
     
     return image  # Return the processed image
 
+def string_to_model_type(model_type_str):
+    """
+    Convert a string to a ModelType enum.
+    """
+    try:
+        return ModelType[model_type_str.upper()]
+    except KeyError:
+        raise ValueError(f"Invalid model type: {model_type_str}. Available types: {[e.name for e in ModelType]}")
+
+class ModelType(enum.Enum):
+
+    YOLO_8_D = "model_zoo/yolov8n_det.onnx"
+    YOLOY_11_S = "model_zoo/yolo11n-seg.onnx"
 
 class VideoONNXWorker(QThread):
     image = pyqtSignal(QImage)
 
-    def __init__(self,video_source=-1,model_source='model_zoo/yolov8n_det.onnx',fps=30,limit_fps=True,model_confidence_threshold=0.5, iou_threshold=0.4,
+    def __init__(self,video_source=-1,model=ModelType.YOLO_8_D,fps=30,limit_fps=True,model_confidence_threshold=0.5, iou_threshold=0.4,
                  provider = 'CUDAExecutionProvider' if 'CUDAExecutionProvider' in providers else 'CPUExecutionProvider' ):
         super().__init__()
 
-        print("Onnx provider:", provider)
+        self.device = provider
         self.video_source = video_source
-        self.model_source = model_source
-        self.model = ort.InferenceSession(self.model_source, providers=[provider])
+        self.model_type = model
+        self.model = ort.InferenceSession(self.model_type.value, providers=[self.device])
         self.running = False
         self.paused = False
         self.capture = None
@@ -141,9 +143,6 @@ class VideoONNXWorker(QThread):
         self.confidence_threshold = model_confidence_threshold
         self.iou_threshold = iou_threshold
         self.input_name = self.model.get_inputs()[0].name  # Get the input name of the model    
-        # self.input_size = (self.model.get_inputs()[0].shape[2], self.model.get_inputs()[0].shape[3])  # Get the input size of the model
-        # print("input size:", self.input_size)
-
 
         self.capture = cv.VideoCapture(self.video_source)
         # get the input size from the capture
@@ -151,6 +150,15 @@ class VideoONNXWorker(QThread):
             raise ValueError(f"Could not open video source: {self.video_source}")
 
 
+    def load_model(self, model_type):
+        if self.running:
+            self.running = False
+
+        self.model_type = string_to_model_type(model_type)
+        self.model = ort.InferenceSession(self.model_type.value, providers=[self.device])
+        self.input_name = self.model.get_inputs()[0].name  # Get the input name of the model
+
+        self.running = True
 
     def run(self):
         self.running = True
@@ -179,21 +187,21 @@ class VideoONNXWorker(QThread):
                     output_image = frame.copy()  # Keep a copy of the original image for output
 
                     # Preprocess the frame for the model
-                    preprocessed_frame = preprocess_image(frame, 640)  # Assuming the model input size is (416, 240)
+                    preprocessed_frame = preprocess_image_yolo8(frame, 640)  # Assuming the model input size is (416, 240)
                     # Run the model inference
                     try:
                         output = self.model.run(None, {self.input_name: preprocessed_frame})[0]
                         output = np.squeeze(output)  # Remove batch dimension
 
-                        detections = postprocess_detections(output, class_confidence_threshold=self.confidence_threshold,
+                        detections = postprocess_detections_yolo8(output, class_confidence_threshold=self.confidence_threshold,
                                                             iou_threshold=self.iou_threshold)
                         
                         # Append the original image to the detections for display
                         detections.append(output_image)  # Append the original image to the detections
 
                         # draw the detections on the output image
-                        output_image = inpaint_yolo_results(detections)
-                    
+                        output_image = inpaint_yolo_results_yolo8(detections)
+
                         qt_image = cv_image_to_qlabel(output_image)
 
                         self.image.emit(qt_image)
@@ -213,6 +221,19 @@ class VideoONNXWorker(QThread):
                 self.msleep(100)
 
         self.capture.release()
+
+
+    def set_confidence_threshold(self, confidence_threshold):
+        """
+        Update the confidence threshold for the model.
+        """
+        self.confidence_threshold = confidence_threshold
+
+    def set_iou_threshold(self, iou_threshold):
+        """
+        Update the IOU threshold for the model.
+        """
+        self.iou_threshold = iou_threshold
 
     def pause(self):
         self.paused = True
