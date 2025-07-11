@@ -1,10 +1,9 @@
 from PyQt5.QtWidgets import QVBoxLayout, QPushButton, QWidget,QLabel,QHBoxLayout
 from PyQt5.QtGui import QPixmap,QIcon
 from PyQt5.QtCore import Qt
-from custom_workers.camera_worker import CameraWorker, CameraFeedMode
+from custom_workers.camera_worker import  CameraFeedMode
 from utils import qlabel_to_cv_image
 from custom_widgets.camera_feed_editor import CameraFeedDialog
-from custom_workers.camera_worker import VideoQueueWorker
 from custom_workers.save_video_worker import SaveVideoWorker
 from custom_workers.save_image_worker import SaveImageWorker
 from custom_widgets.camera_mode_widget import CameraModeDialog
