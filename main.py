@@ -1,8 +1,5 @@
 from custom_widgets.camera_widget import CameraWidget
-from custom_widgets.output_widget import OutputWidget
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget,QHBoxLayout,QAction,QFileDialog
-from custom_widgets.camera_feed_editor import CameraFeedDialog
-from custom_widgets.yolo_output_widget import YoloOutputWidget
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget,QHBoxLayout,QAction,QFileDialog
 from custom_widgets.mode_settings_editor import ModeSettingsEditor
 import sys
 
@@ -12,50 +9,35 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("Camera and Output Widget")
 
-        
         file_menu = self.menuBar().addMenu("File")
         edit_menu = self.menuBar().addMenu("Edit")
 
         self.load_video_action = QAction("Load Video", self)
         self.set_live_camera_action = QAction("Change Live Source", self)
 
-        self.change_model_action = QAction("Change Model", self)
         self.edit_model_settings_action = QAction("Edit Model Settings", self)
-
 
         file_menu.addAction(self.load_video_action)
         file_menu.addAction(self.set_live_camera_action)
 
-        edit_menu.addAction(self.change_model_action)
+        # edit_menu.addAction(self.change_model_action)
         edit_menu.addAction(self.edit_model_settings_action)
-        # model_menu.addAction(self.change_deep_learning_model_action)
+ 
         self.camera_widget = CameraWidget()
-        # self.output_widget = OutputWidget(self)
-        # self.yolo_output_widget = YoloOutputWidget(self)
 
         layout = QHBoxLayout()
         layout.addWidget(self.camera_widget)
-        # layout.addWidget(self.output_widget)
-        # layout.addWidget(self.yolo_output_widget)
 
         container = QWidget()
         container.setLayout(layout)
         
         self.setCentralWidget(container)
 
-        # self.camera_widget.camera_worker.image.connect(self.output_widget.worker.process)
-        # self.camera_widget.camera_worker.image.connect(self.yolo_output_widget.model_worker.processing_list.put)
-
-
         self.load_video_action.triggered.connect(self.update_video_source)
         self.set_live_camera_action.triggered.connect(self.update_camera_source)
-        self.change_model_action.triggered.connect(self.change_model)
         self.edit_model_settings_action.triggered.connect(self.edit_model_settings)
-
+       
         self._camera_source = -1  # Default value for camera source
-
-        # self.yolo_output_widget.start_worker()  # Start the YOLO worker thread
-
 
     def update_video_source(self):
         # create file dialog to select video file
@@ -66,28 +48,21 @@ class MainWindow(QMainWindow):
     def update_camera_source(self):
         self.camera_widget.update_video_source()  # Stop the current video source if any
 
-
-    def change_model(self):
-        pass
+    def _load_new_model(self, selected_model):
+        if selected_model!= self.camera_widget.camera_worker.model_type.name:
+            self.camera_widget.camera_worker.load_model(selected_model)
 
     def edit_model_settings(self):
         # Open a dialog to edit model settings
-        dialog = ModeSettingsEditor(self)
+        dialog = ModeSettingsEditor(self,self.camera_widget.camera_worker.iou_threshold, self.camera_widget.camera_worker.confidence_threshold)
         dialog.exec_()
+        selected_model = dialog.mode_selector.currentText().upper()
+        self._load_new_model(selected_model)
 
-    # def closeEvent(self, event):
-    #     self.camera_widget.camera_worker.running = False
-    #     self.camera_widget.camera_worker.wait()  # Wait for the camera worker thread to finish
-    #     self.camera_widget.camera_worker.stop()  # Stop the camera worker thread
-
-    #     self.output_widget.worker.wait()  # Wait for the output worker thread to finish
-    #     self.output_widget.worker.stop_thread()
-    #     # Signal all threads to stop
-    #     # # self.stop_event.set()
-    #     # for worker in self.workers:
-    #     #     worker.join()  # Wait for threads to finish
-    #     # event.accept()
-        
+        confidence_threshold = dialog.get_confidence_threshold()
+        iou_threshold = dialog.get_iou_threshold()
+        self.camera_widget.camera_worker.set_confidence_threshold(confidence_threshold)
+        self.camera_widget.camera_worker.set_iou_threshold(iou_threshold)
 
 if __name__ == "__main__":
     try:
