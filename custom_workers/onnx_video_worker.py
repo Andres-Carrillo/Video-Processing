@@ -20,6 +20,8 @@ def get_class_color(class_id):
     """    
     return COCO_COLOR_LIST.get(class_id, (255, 255, 255))  # Default to white if class_id not found
 
+  
+
 def preprocess_image_yolo8(image, input_size):
     """
     Preprocess the image for YOLO model input.
@@ -55,9 +57,13 @@ def postprocess_detections_yolo8(detections, class_confidence_threshold = 0.5, i
     """
     Postprocess the raw detections from the YOLO model.
     """
-
+    print("detections shape:", detections.shape)  # Debugging line to check the shape of detections
     boxes = detections[:4, :].T # Assuming the first 4 rows are x_center, y_center, width, height
     scores = detections[4:, :].T  # shape: (8400, 80)  # Assuming the 5th row is the confidence score
+
+
+    print("boxes shape:", boxes.shape)  # Debugging line to check the shape of boxes
+    print("scores shape:", scores.shape)  # Debugging line to check the shape of
     
     detection_count = scores.shape[0]  # Number of detections
 
@@ -67,11 +73,19 @@ def postprocess_detections_yolo8(detections, class_confidence_threshold = 0.5, i
     results = []
 
     for i in range(detection_count):
+        print(f"Processing detection {i+1}/{detection_count}")  # Debugging line to track progress
+
+
         class_id = np.argmax(scores[i])
+        
+        print(f"Class ID: {class_id}")  # Debugging line to check the class ID
         confidence = scores[i][class_id]  # Get the confidence score for the class with the highest score
+        
+        print(f"Confidence: {confidence}")  # Debugging line to check the confidence scores
         if confidence < class_confidence_threshold:
             continue
-
+        
+        print(f"Box before normalization: {boxes[i]}")  # Debugging line to check the box before normalization
         x,y,w,h = boxes[i]
         x1 = int(x -w / 2)
         y1 = int(y - h / 2)
@@ -87,6 +101,73 @@ def postprocess_detections_yolo8(detections, class_confidence_threshold = 0.5, i
 
     # return the filtered detections
     return [[normalized_boxes[i], confidence_scores[i], class_ids[i]] for i in indices]
+
+
+
+
+def postprocess_detections_yolo11(detections, class_confidence_threshold=0.5, iou_threshold=0.4, num_classes=80, mask_dim=32):
+    preds, protos = detections
+    preds = np.squeeze(preds, axis=0)   # (N, 4+1+num_classes+mask_dim)
+    protos = np.squeeze(protos, axis=0) # (mask_dim, mask_h, mask_w)
+
+    boxes = preds[:, :4]  # x_center, y_center, w, h
+    objectness = preds[:, 4]
+    class_scores = preds[:, 5:5+num_classes]
+    mask_vectors = preds[:, 5+num_classes:5+num_classes+mask_dim]
+
+    detection_count = preds.shape[0]
+    for i in range(detection_count):
+        # Get the class with the highest score
+        class_id = np.argmax(class_scores[i])
+        confidence = class_scores[i][class_id]
+        if confidence < class_confidence_threshold:
+            continue
+
+        x, y, w, h = boxes[i]
+        x1 = int(x - w / 2)
+        y1 = int(y - h / 2)
+        x2 = int(x + w / 2)
+        y2 = int(y + h / 2)
+        print(f"Detection {i}: Box=({x1},{y1},{x2},{y2}), Class={class_id}, Confidence={confidence}")
+
+        # mask_vector = mask_vectors[i]
+        # You can now use mask_vector and protos to reconstruct the mask for this detection
+
+
+# def postprocess_detections_yolo11(detections, class_confidence_threshold = 0.5, iou_threshold=0.4):
+    # # image = detections[-1]  # Assuming the last item is the image
+    # preds,protos = detections
+
+    # preds = np.squeeze(preds, axis=0)
+
+    # protos = np.squeeze(protos, axis=0)
+
+    # print("preds shape:", preds.shape)  # Debugging line to check the shape of preds
+
+    # # boxes = preds[:, :4]  # Assuming the first 4 columns are x_center, y_center, width, height
+    # # scores = preds[:, 4:]  # Assuming the remaining columns are class scores    
+    # # class_ids = []
+    # detection_count = preds.shape[1]  # Number of detections
+    # # print("boxes:", boxes)
+    # # print("scores:", scores)
+
+    # # detection_count = scores.shape[0]  # Number of detections
+
+    # for i in range(detection_count):
+    #     print("len(preds):", len(preds[i]))  # Debugging line to check the length of preds
+    #     boxes = preds[0][i]  # Assuming the first 4 items in preds are the boxes
+    #     print("boxes:", boxes)  # Debugging line to check the boxes
+    # #     class_id = np.argmax(scores[i])
+    # #     class_ids.append(class_id)
+
+    # #     print(f"Detection {i+1}/{detection_count}: Class ID: {class_id}, Score: {scores[i][class_id]}")  # Debugging line to check the class ID and score
+
+    # # result = [ p for p in detections]
+    # # print("detections shape:", result)  # Debugging line to check the shape of detections
+    # # print("preds shape:", preds.shape)  # Debugging line to check the shape of preds
+    # # print("protos shape:", protos.shape)  # Debugging line to check the shape of protos
+    # # print("detections shape:", detections.shape)  # Debugging line to check the shape of detections
+    # # print("detections[0][0] shape:", detections[0][0])  # Debugging line to check the shape of detections[0][0]
 
 def inpaint_yolo_results_yolo8(results):
 
@@ -143,11 +224,19 @@ class VideoONNXWorker(QThread):
         self.confidence_threshold = model_confidence_threshold
         self.iou_threshold = iou_threshold
         self.input_name = self.model.get_inputs()[0].name  # Get the input name of the model    
-
+        self.valid_video_stream = False
+        
+        print("video source:", video_source)  # Debugging line to check the video source
         self.capture = cv.VideoCapture(self.video_source)
+        if self.capture.isOpened():
+            self.valid_video_stream = True
+            print(f"Could not open video source: {self.video_source}")
+        # if ret == -1:
+            # self.capture = -1
+        # print("self.capture::", self.capture)  # Debugging line to check if the capture is opened
         # get the input size from the capture
-        if not self.capture.isOpened():
-            raise ValueError(f"Could not open video source: {self.video_source}")
+        # if not self.capture.isOpened():
+        #     raise ValueError(f"Could not open video source: {self.video_source}")
 
 
     def load_model(self, model_type):
@@ -182,20 +271,25 @@ class VideoONNXWorker(QThread):
                 if ret:
                     self.prev = cv_image_to_qlabel(frame)
 
-                    # print("frame type:", type(frame))
-
                     output_image = frame.copy()  # Keep a copy of the original image for output
 
                     # Preprocess the frame for the model
                     preprocessed_frame = preprocess_image_yolo8(frame, 640)  # Assuming the model input size is (416, 240)
+                   
                     # Run the model inference
                     try:
-                        output = self.model.run(None, {self.input_name: preprocessed_frame})[0]
-                        output = np.squeeze(output)  # Remove batch dimension
 
-                        detections = postprocess_detections_yolo8(output, class_confidence_threshold=self.confidence_threshold,
+                        if self.model_type == ModelType.YOLO_8_D:
+                            output = self.model.run(None, {self.input_name: preprocessed_frame})[0]
+                            output = np.squeeze(output)  # Remove batch dimension
+                            detections = postprocess_detections_yolo8(output, class_confidence_threshold=self.confidence_threshold,
                                                             iou_threshold=self.iou_threshold)
-                        
+                        elif self.model_type == ModelType.YOLOY_11_S:
+                            output = self.model.run(None, {self.input_name: preprocessed_frame})
+                            
+                            detections = postprocess_detections_yolo11(output, class_confidence_threshold=self.confidence_threshold,
+                                                            iou_threshold=self.iou_threshold)
+                            
                         # Append the original image to the detections for display
                         detections.append(output_image)  # Append the original image to the detections
 
@@ -221,7 +315,6 @@ class VideoONNXWorker(QThread):
                 self.msleep(100)
 
         self.capture.release()
-
 
     def set_confidence_threshold(self, confidence_threshold):
         """

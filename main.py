@@ -40,10 +40,11 @@ class MainWindow(QMainWindow):
         self._camera_source = -1  # Default value for camera source
 
     def update_video_source(self):
-        # create file dialog to select video file
-        video_file, _ = QFileDialog.getOpenFileName(self, "Select Video File", "", "Video Files (*.mp4 *.avi *.mov)")
-        if video_file:
-            self.camera_widget.set_video_source(video_file)
+        self.camera_widget.get_file_from_user()  # Open file dialog to select video file
+        # # create file dialog to select video file
+        # video_file, _ = QFileDialog.getOpenFileName(self, "Select Video File", "", "Video Files (*.mp4 *.avi *.mov)")
+        # if video_file:
+        #     self.camera_widget.set_video_source(video_file)
 
     def update_camera_source(self):
         self.camera_widget.update_video_source()  # Stop the current video source if any

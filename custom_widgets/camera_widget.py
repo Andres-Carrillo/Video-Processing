@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QVBoxLayout, QPushButton, QWidget,QLabel,QHBoxLayout
+from PyQt5.QtWidgets import QVBoxLayout, QPushButton, QWidget,QLabel,QHBoxLayout,QFileDialog
 from PyQt5.QtGui import QPixmap,QIcon
 from PyQt5.QtCore import Qt
 from custom_workers.camera_worker import  CameraFeedMode
@@ -96,12 +96,18 @@ class CameraWidget(QWidget):
             self.camera_worker.toggle_single_frame_mode(True)  # Toggle single frame mode in the worker
 
     def start(self):
-        self.camera_worker.start()
-        # self.frame_queue_worker.start()
 
-        CameraWidget.running = True
+        print("self.camera_worker.capture: ", self.camera_worker.capture)  # Debugging line to check the capture object
+        if self.camera_worker.valid_video_stream:
+            self.camera_worker.start()
+            CameraWidget.running = True
+            self._set_pause_icon()
 
-        self._set_pause_icon()
+        else:
+
+            self.get_file_from_user()  # If no valid video stream, try to update the video source
+            # pass
+            #Spawn a dialog to select a video source
 
     def set_video_source(self, video_source):
         if self.camera_worker.running:
@@ -115,6 +121,13 @@ class CameraWidget(QWidget):
 
 
         self._set_pause_icon()
+
+
+    def get_file_from_user(self):
+        # create file dialog to select video file
+        video_file, _ = QFileDialog.getOpenFileName(self, "Select Video File", "", "Video Files (*.mp4 *.avi *.mov)")
+        if video_file:
+            self.set_video_source(video_file)
 
     def update_video_source(self):
          # create widget that displays available cameras
