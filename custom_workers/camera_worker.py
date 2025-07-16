@@ -27,7 +27,6 @@ class CameraWorker(QThread):
         self.single_frame_mode = False
         self.prev = None  # To store the previous frame for paused state
 
-
         if camera_mode == CameraFeedMode.REAL_TIME_PROCESSING and video_path is not None:
             self.capture = cv.VideoCapture(video_path)
         else:
@@ -58,7 +57,6 @@ class CameraWorker(QThread):
                     self.prev = qt_image = cv_image_to_qlabel(frame)
                     self.image.emit(qt_image)
                     end = time.perf_counter()
-                    print(f"Frame processed in {end - start:.4f} seconds that is {1 / (end - start):.2f} FPS")
                 else:
                     break
             else:
@@ -75,7 +73,6 @@ class CameraWorker(QThread):
 
 
     def toggle_single_frame_mode(self, enable):
-        print(f"Toggling single frame mode to {enable}")
         self.single_frame_mode = enable
 
     def set_video_path(self, video_path):
@@ -111,8 +108,6 @@ class CameraWorker(QThread):
 # it can be used to process frames in batches or to provide a live feed from a video
 # it emits frames as QImage objects
 # it must take in frames from another thread (e.g. CameraWorker)
-
-##TODO: Rewrite thread safety to not reliy on qsize
 class VideoQueueWorker(QThread):
     batch_ready = pyqtSignal(list)
     pause_processing = pyqtSignal()

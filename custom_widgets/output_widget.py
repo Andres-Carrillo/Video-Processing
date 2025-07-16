@@ -35,7 +35,6 @@ class OutputWidget(QWidget):
         if is_fixed_size:
             self.setFixedSize(size[0], size[1])
 
-    
     def _init_worker(self):
         self.worker = UpscaleWorker(model_type="esrgan", is_deep_learning=True)
         self.worker.processed.connect(self.update_canvas)

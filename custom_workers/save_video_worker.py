@@ -1,8 +1,7 @@
 from PyQt5.QtCore import  QThread, pyqtSignal,pyqtSlot
 from PyQt5.QtGui import QImage
 import cv2 as cv
-from utils import qimage_to_cv_image,cv_image_to_qimage
-import numpy as np
+from utils import qimage_to_cv_image
 
 class SaveVideoWorker(QThread):
     saved = pyqtSignal()

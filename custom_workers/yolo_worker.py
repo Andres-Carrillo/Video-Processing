@@ -1,12 +1,9 @@
 import cv2 as cv
 import onnxruntime as ort
 import numpy as np
-from PyQt5.QtCore import  QThread, pyqtSignal,pyqtSlot
-from PyQt5.QtGui import QImage
-from custom_workers.base_worker import BaseImageWorker
-from utils import qimage_to_cv_image, cv_image_to_qimage
+from PyQt5.QtCore import  QThread, pyqtSignal
+from utils import qimage_to_cv_image
 import queue
-import time
 
 def preprocess_image(image, input_size):
     """
@@ -23,9 +20,7 @@ def preprocess_image(image, input_size):
     normalized_image = np.transpose(normalized_image, (2, 0, 1))  # Change to CHW format
     normalized_image = np.expand_dims(normalized_image, axis=0)  # Add batch dimension
 
-
     return normalized_image
-
 
 def apply_nms(boxes, scores, iou_threshold):
     """
@@ -34,7 +29,6 @@ def apply_nms(boxes, scores, iou_threshold):
     indices = cv.dnn.NMSBoxes(boxes, scores, score_threshold=0.5, nms_threshold=iou_threshold)
     
     return indices.flatten() if len(indices) > 0 else []
-
 
 def postprocess_detections(detections, input_size, class_confidence_threshold = 0.5,obj_conf_threshold=0.2, iou_threshold=0.4):
     """
@@ -107,13 +101,10 @@ class YOLOWorker(QThread):
                 This method is called when the thread starts.
                 """
                 while self.running:
-                    print("self.processing_list.qsize():", self.processing_list.qsize())
                     if self.processing_list.empty() or self.paused:
-                        self.msleep(100)
-                        print("Worker is paused or processing list is empty, waiting...")   
+                        self.msleep(100)   
                         continue
                     
-                    start = time.perf_counter()
                     # Get the next frame from the processing list
                     data = self.processing_list.get()
 
@@ -153,9 +144,6 @@ class YOLOWorker(QThread):
 
                     # Emit the results
                     self.results.emit(detections)
-                    # print(f"Processed frame with {len(detections) - 1} detections")  # Exclude the last item which is the image
-                    end = time.perf_counter()
-                    print(f"Frame processed by YOLO in {end - start:.4f} seconds that is {1 / (end - start):.2f} FPS")
 
 
         def stop_thread(self):

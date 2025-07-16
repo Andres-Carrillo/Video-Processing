@@ -248,8 +248,6 @@ def cv_color_space_to_string(color_space):
         str: The string representation of the color space.
     """
 
-    # print("color space:", color_space)
-    # print("cv2.COLOR_BGR2RGB:", cv2.COLOR_BGR2RGB)
     if color_space == cv2.COLOR_BGR2RGB:
         return 'RGB'
     elif color_space == cv2.COLOR_BGR2GRAY:

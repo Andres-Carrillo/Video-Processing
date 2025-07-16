@@ -22,7 +22,6 @@ class CameraFeedWidget(QWidget):
         self.feed_option_widget.currentIndexChanged.connect(self._on_camera_selected)
     
     def _on_camera_selected(self, index):
-        print(f"Selected camera index: {index}")
         self.camera_index = index
 
     def _init_camera_list(self):

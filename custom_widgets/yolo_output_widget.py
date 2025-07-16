@@ -1,10 +1,9 @@
 from PyQt5.QtCore import Qt,pyqtSlot
 from PyQt5.QtGui import  QPixmap
-from PyQt5.QtWidgets import QWidget, QLabel,QGridLayout,QComboBox
+from PyQt5.QtWidgets import QWidget, QLabel,QGridLayout
 from custom_workers.yolo_worker import YOLOWorker
+from utils import  cv_image_to_qimage,COCO_CLASSES, COCO_COLOR_LIST
 import cv2 as cv
-from utils import qimage_to_cv_image, cv_image_to_qimage,COCO_CLASSES, COCO_COLOR_LIST
-import time
 
 def get_class_name(class_id):
     return COCO_CLASSES.get(class_id, "Unknown")
@@ -38,14 +37,9 @@ def inpaint_yolo_results(results):
 
     # Convert the processed image back to QPixmap
     processed_image = cv_image_to_qimage(image)
-
-   
     
     return processed_image  # Return the processed image
 
-
-
-# TODO: Add setting button to change model path, input size, confidence threshold, and IOU threshold, also model mode (detection, segmentation, etc.)
 class YoloOutputWidget(QWidget):
     def __init__(self,parent,fixed_size=False,size=(640,600)):
         super().__init__(parent)
@@ -87,7 +81,6 @@ class YoloOutputWidget(QWidget):
 
                 self.label.setPixmap(data)
                 self.label.repaint()
-                print("returning processed image")
 
             else:
                 print("No data received or empty list")

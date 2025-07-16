@@ -7,10 +7,8 @@ from custom_widgets.camera_feed_editor import CameraFeedDialog
 from custom_workers.save_video_worker import SaveVideoWorker
 from custom_workers.save_image_worker import SaveImageWorker
 from custom_widgets.camera_mode_widget import CameraModeDialog
-import cv2 as cv
-import enum
-
 from custom_workers.onnx_video_worker import VideoONNXWorker
+import cv2 as cv
 import os
 
 class CameraWidget(QWidget):
@@ -34,7 +32,6 @@ class CameraWidget(QWidget):
         self.camera_worker = VideoONNXWorker()
         self.camera_worker.image.connect(self.update_image)
          
-
     def _init_ui(self):
         self.image_label = QLabel()
         blank_canvas = QPixmap(640, 480)
@@ -81,7 +78,6 @@ class CameraWidget(QWidget):
         self.forward_button.setVisible(False)  # Initially hide the forward button
         self.backward_button.setVisible(False)  # Initially hide the backward button
 
-
     def swap_ui(self,mode):
         if mode == CameraFeedMode.LIVE_FEED or mode == CameraFeedMode.REAL_TIME_PROCESSING:
             self.play_button.setVisible(True)
@@ -96,18 +92,12 @@ class CameraWidget(QWidget):
             self.camera_worker.toggle_single_frame_mode(True)  # Toggle single frame mode in the worker
 
     def start(self):
-
-        print("self.camera_worker.capture: ", self.camera_worker.capture)  # Debugging line to check the capture object
         if self.camera_worker.valid_video_stream:
             self.camera_worker.start()
             CameraWidget.running = True
             self._set_pause_icon()
-
         else:
-
             self.get_file_from_user()  # If no valid video stream, try to update the video source
-            # pass
-            #Spawn a dialog to select a video source
 
     def set_video_source(self, video_source):
         if self.camera_worker.running:
@@ -119,9 +109,7 @@ class CameraWidget(QWidget):
         self.camera_worker.running = True
         self.camera_worker.start()  # Restart the thread with the new video source
 
-
         self._set_pause_icon()
-
 
     def get_file_from_user(self):
         # create file dialog to select video file
@@ -174,8 +162,6 @@ class CameraWidget(QWidget):
         self.image_writer.start()
 
     def update_image(self, q_image):
-     
-
         pixmap = QPixmap.fromImage(q_image)
         self.image_label.setPixmap(pixmap)
 

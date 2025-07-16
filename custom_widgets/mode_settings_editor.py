@@ -1,5 +1,5 @@
 # QDialgo to edit model settings
-from PyQt5.QtWidgets import QWidget, QSizePolicy,QVBoxLayout, QLabel, QComboBox, QPushButton, QDialog,QSlider
+from PyQt5.QtWidgets import QSizePolicy,QVBoxLayout, QLabel, QComboBox, QPushButton, QDialog,QSlider
 from PyQt5.QtCore import Qt
 
 class ModeSettingsEditor(QDialog):

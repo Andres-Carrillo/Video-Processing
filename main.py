@@ -1,5 +1,5 @@
 from custom_widgets.camera_widget import CameraWidget
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget,QHBoxLayout,QAction,QFileDialog
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget,QHBoxLayout,QAction
 from custom_widgets.mode_settings_editor import ModeSettingsEditor
 import sys
 
@@ -20,7 +20,6 @@ class MainWindow(QMainWindow):
         file_menu.addAction(self.load_video_action)
         file_menu.addAction(self.set_live_camera_action)
 
-        # edit_menu.addAction(self.change_model_action)
         edit_menu.addAction(self.edit_model_settings_action)
  
         self.camera_widget = CameraWidget()
@@ -41,10 +40,6 @@ class MainWindow(QMainWindow):
 
     def update_video_source(self):
         self.camera_widget.get_file_from_user()  # Open file dialog to select video file
-        # # create file dialog to select video file
-        # video_file, _ = QFileDialog.getOpenFileName(self, "Select Video File", "", "Video Files (*.mp4 *.avi *.mov)")
-        # if video_file:
-        #     self.camera_widget.set_video_source(video_file)
 
     def update_camera_source(self):
         self.camera_widget.update_video_source()  # Stop the current video source if any
@@ -73,5 +68,4 @@ if __name__ == "__main__":
         sys.exit(app.exec_())
     except Exception as e:
         print(f"An error occurred: {e}")
-        # main_window.output_widget.worker.video_writer.release()  # Ensure video writer is released
         sys.exit(1)

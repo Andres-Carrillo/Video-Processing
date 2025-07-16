@@ -1,13 +1,11 @@
-import cv2 as cv
-import onnxruntime as ort
-import numpy as np
 from PyQt5.QtCore import  QThread, pyqtSignal
 from PyQt5.QtGui import QImage
 from utils import cv_image_to_qlabel,COCO_CLASSES, COCO_COLOR_LIST
-from custom_workers.camera_worker import CameraFeedMode
 import enum
 import time
-
+import cv2 as cv
+import onnxruntime as ort
+import numpy as np
 providers = ort.get_available_providers()
 
 def get_class_name(class_id):
@@ -19,8 +17,6 @@ def get_class_color(class_id):
     This function can be modified to return different colors based on the class ID.
     """    
     return COCO_COLOR_LIST.get(class_id, (255, 255, 255))  # Default to white if class_id not found
-
-  
 
 def preprocess_image_yolo8(image, input_size):
     """
@@ -57,14 +53,10 @@ def postprocess_detections_yolo8(detections, class_confidence_threshold = 0.5, i
     """
     Postprocess the raw detections from the YOLO model.
     """
-    print("detections shape:", detections.shape)  # Debugging line to check the shape of detections
+   
     boxes = detections[:4, :].T # Assuming the first 4 rows are x_center, y_center, width, height
     scores = detections[4:, :].T  # shape: (8400, 80)  # Assuming the 5th row is the confidence score
 
-
-    print("boxes shape:", boxes.shape)  # Debugging line to check the shape of boxes
-    print("scores shape:", scores.shape)  # Debugging line to check the shape of
-    
     detection_count = scores.shape[0]  # Number of detections
 
     normalized_boxes = []
@@ -73,19 +65,13 @@ def postprocess_detections_yolo8(detections, class_confidence_threshold = 0.5, i
     results = []
 
     for i in range(detection_count):
-        print(f"Processing detection {i+1}/{detection_count}")  # Debugging line to track progress
-
-
         class_id = np.argmax(scores[i])
-        
-        print(f"Class ID: {class_id}")  # Debugging line to check the class ID
+
         confidence = scores[i][class_id]  # Get the confidence score for the class with the highest score
         
-        print(f"Confidence: {confidence}")  # Debugging line to check the confidence scores
         if confidence < class_confidence_threshold:
             continue
         
-        print(f"Box before normalization: {boxes[i]}")  # Debugging line to check the box before normalization
         x,y,w,h = boxes[i]
         x1 = int(x -w / 2)
         y1 = int(y - h / 2)
@@ -101,9 +87,6 @@ def postprocess_detections_yolo8(detections, class_confidence_threshold = 0.5, i
 
     # return the filtered detections
     return [[normalized_boxes[i], confidence_scores[i], class_ids[i]] for i in indices]
-
-
-
 
 def postprocess_detections_yolo11(detections, class_confidence_threshold=0.5, iou_threshold=0.4, num_classes=80, mask_dim=32):
     preds, protos = detections
@@ -130,44 +113,6 @@ def postprocess_detections_yolo11(detections, class_confidence_threshold=0.5, io
         y2 = int(y + h / 2)
         print(f"Detection {i}: Box=({x1},{y1},{x2},{y2}), Class={class_id}, Confidence={confidence}")
 
-        # mask_vector = mask_vectors[i]
-        # You can now use mask_vector and protos to reconstruct the mask for this detection
-
-
-# def postprocess_detections_yolo11(detections, class_confidence_threshold = 0.5, iou_threshold=0.4):
-    # # image = detections[-1]  # Assuming the last item is the image
-    # preds,protos = detections
-
-    # preds = np.squeeze(preds, axis=0)
-
-    # protos = np.squeeze(protos, axis=0)
-
-    # print("preds shape:", preds.shape)  # Debugging line to check the shape of preds
-
-    # # boxes = preds[:, :4]  # Assuming the first 4 columns are x_center, y_center, width, height
-    # # scores = preds[:, 4:]  # Assuming the remaining columns are class scores    
-    # # class_ids = []
-    # detection_count = preds.shape[1]  # Number of detections
-    # # print("boxes:", boxes)
-    # # print("scores:", scores)
-
-    # # detection_count = scores.shape[0]  # Number of detections
-
-    # for i in range(detection_count):
-    #     print("len(preds):", len(preds[i]))  # Debugging line to check the length of preds
-    #     boxes = preds[0][i]  # Assuming the first 4 items in preds are the boxes
-    #     print("boxes:", boxes)  # Debugging line to check the boxes
-    # #     class_id = np.argmax(scores[i])
-    # #     class_ids.append(class_id)
-
-    # #     print(f"Detection {i+1}/{detection_count}: Class ID: {class_id}, Score: {scores[i][class_id]}")  # Debugging line to check the class ID and score
-
-    # # result = [ p for p in detections]
-    # # print("detections shape:", result)  # Debugging line to check the shape of detections
-    # # print("preds shape:", preds.shape)  # Debugging line to check the shape of preds
-    # # print("protos shape:", protos.shape)  # Debugging line to check the shape of protos
-    # # print("detections shape:", detections.shape)  # Debugging line to check the shape of detections
-    # # print("detections[0][0] shape:", detections[0][0])  # Debugging line to check the shape of detections[0][0]
 
 def inpaint_yolo_results_yolo8(results):
 
@@ -226,17 +171,11 @@ class VideoONNXWorker(QThread):
         self.input_name = self.model.get_inputs()[0].name  # Get the input name of the model    
         self.valid_video_stream = False
         
-        print("video source:", video_source)  # Debugging line to check the video source
+
         self.capture = cv.VideoCapture(self.video_source)
+        
         if self.capture.isOpened():
             self.valid_video_stream = True
-            print(f"Could not open video source: {self.video_source}")
-        # if ret == -1:
-            # self.capture = -1
-        # print("self.capture::", self.capture)  # Debugging line to check if the capture is opened
-        # get the input size from the capture
-        # if not self.capture.isOpened():
-        #     raise ValueError(f"Could not open video source: {self.video_source}")
 
 
     def load_model(self, model_type):
@@ -299,7 +238,6 @@ class VideoONNXWorker(QThread):
                         qt_image = cv_image_to_qlabel(output_image)
 
                         self.image.emit(qt_image)
-                        print(f"Frame processed in {time.perf_counter() - start:.4f} seconds that is {1 / (time.perf_counter() - start):.2f} FPS")
                     except Exception as e:
                         print(f"Error during model inference: {e}")
                         output_image = cv_image_to_qlabel(output_image)
