@@ -5,4 +5,4 @@ This is a PyQt based desktop application that uses the ONNX Runtime to run Deep 
 
 **YOLO 8 Detection Demo:**
 
-[yolo_8_demo.webm](https://github.com/user-attachments/assets/3eb47934-cb12-4e8f-9090-85c7fe6fc678)
+[yolo_8_detection_demo.webm](https://github.com/user-attachments/assets/70e25449-8610-4b82-a650-93dec205260c)
