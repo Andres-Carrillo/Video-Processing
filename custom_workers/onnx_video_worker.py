@@ -99,12 +99,11 @@ def postprocess_detections_yolo8(image,detections, class_confidence_threshold = 
         if confidence >= class_confidence_threshold:
         
             x_center,y_center,w,h = boxes[i]
-            print("boxe before normalization: ",boxes[i])
+    
             x1 = int(x_center - (0.5*w))
             y1 = int(y_center - (0.5*h))
             x2 = int(x_center + (0.5*w))
             y2 = int(y_center + (0.5*h))
-            print("boxe after normalization: ",[x1, y1, x2, y2])
     
             normalized_boxes.append([x1, y1, x2, y2])  # Append the bounding box coordinates
             class_ids.append(class_id)
@@ -115,19 +114,22 @@ def postprocess_detections_yolo8(image,detections, class_confidence_threshold = 
     indices = apply_nms_yolo8(normalized_boxes, confidence_scores, iou_threshold)
 
     og_size = (image.shape[1], image.shape[0])  # Original image size (height, width)
-    image = cv.resize(image, (640, 640))  # Resize the image to
+    scale_factor_x = og_size[0] / 640
+    scale_factor_y = og_size[1] / 640
+ 
     for i in indices:
-        print(f"Detection initial i {i}: Box={normalized_boxes[i]}, Class={class_ids[i]}, Confidence={confidence_scores[i]}")
-        # i = i[0] if isinstance(i, np.ndarray) else i  # Ensure i is an integer index
-        # print(f"Detection {i}: Box={normalized_boxes[i]}, Class={class_ids[i]}, Confidence={confidence_scores[i]}")
 
         x1, y1, x2, y2 = map(int, normalized_boxes[i])
-        print(f"Detection final i {i}: Box=({x1},{y1},{x2},{y2}), Class={class_ids[i]}, Confidence={confidence_scores[i]}")
+        # Scale the bounding box coordinates back to the original image size
+        x1 = int(x1 * scale_factor_x)
+        y1 = int(y1 * scale_factor_y)
+        x2 = int(x2 * scale_factor_x)
+        y2 = int(y2 * scale_factor_y)
 
         cv.rectangle(image, (x1, y1), (x2, y2), get_class_color(class_ids[i]), 2)
         cv.putText(image, f'ID: {get_class_name(class_ids[i])}, Score: {confidence_scores[i]:.4f}', 
                    (x1, y1 - 10), cv.FONT_HERSHEY_SIMPLEX, 0.5, get_class_color(class_ids[i]), 1)
-    image = cv.resize(image, og_size)  # Resize the image back to original size
+    
     # return the filtered detections
     return image
 
@@ -308,6 +310,8 @@ class VideoONNXWorker(QThread):
 
                     # Preprocess the frame for the model
                     preprocessed_frame = preprocess_image_yolo8(frame, 640) 
+
+                    print("output_image shape: ", output_image.shape)  # Debugging line
                    
                     # Run the model inference
                     try:
