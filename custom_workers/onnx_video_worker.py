@@ -38,8 +38,9 @@ def get_class_color(class_id):
     """
     Get the color for a given class ID.
     This function can be modified to return different colors based on the class ID.
-    """    
-    return COCO_COLOR_LIST.get(class_id, (255, 255, 255))  # Default to white if class_id not found
+    """
+    bgr_color = COCO_COLOR_LIST.get(class_id, (255, 255, 255))  # Default to white if class_id not found
+    return (bgr_color[2], bgr_color[1], bgr_color[0])  # Convert RGB to BGR
 
 def preprocess_image_yolo8(image, input_size):
     """
@@ -55,9 +56,7 @@ def preprocess_image_yolo8(image, input_size):
 
     resized_image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
     resized_image = cv.resize(resized_image, dsize)
-    print("Resized image shape: ", resized_image.shape)  # Debugging line
-    
-    
+
     # Normalize the image
     normalized_image = resized_image.astype(np.float32) / 255.0 #scale the image to [0,1] range
 
@@ -81,7 +80,7 @@ def postprocess_detections_yolo8(image,detections, class_confidence_threshold = 
    
     boxes = detections[:4, :].T # Assuming the first 4 rows are x_center, y_center, width, height
 
-    print("boxes: ", boxes.shape)  # Debugging line
+    # print("boxes: ", boxes.shape)  # Debugging line
     scores = detections[4:, :].T  # shape: (8400, 80)  # Assuming the 5th row is the confidence score
 
     detection_count = boxes.shape[0]  # Number of detections
@@ -89,7 +88,6 @@ def postprocess_detections_yolo8(image,detections, class_confidence_threshold = 
     normalized_boxes = []
     class_ids = []
     confidence_scores = []
-    results = []
 
     for i in range(detection_count):
         class_id = np.argmax(scores[i])
@@ -154,7 +152,7 @@ def postprocess_detections_yolo11(detections, class_confidence_threshold=0.5, io
     for i in range(detection_count):
         # Get the class with the highest score
         class_id = np.argmax(class_scores[i])
-        print(f"Class ID: {class_id}, Objectness: {objectness[i]}, Class Scores: {class_scores[i]}")  # Debugging line
+        # print(f"Class ID: {class_id}, Objectness: {objectness[i]}, Class Scores: {class_scores[i]}")  # Debugging line
         confidence = class_scores[i][class_id]
 
         if confidence < class_confidence_threshold:
@@ -181,10 +179,6 @@ def postprocess_detections_yolo11(detections, class_confidence_threshold=0.5, io
     for i in indices:
         results.append([normalized_boxes[i], confidence_scores[i], class_ids[i], mask_vectors[i], protos_keepers[i]])
 
-
-    print(f"Postprocessed {len(results)} detections.")
-    # print("Results:", results)
-
     return results # returns a list of detections in the format [[box, confidence, class_id, mask_vector, protos], ...]
 
 
@@ -202,20 +196,21 @@ def inpaint_yolo_results_yolo8(results):
         x, y, w, h = detection[0]  # Assuming the first four values are x, y, width, height
         class_id = int(detection[2])  # Assuming the fifth value is the class
         score = detection[1]  # Assuming the sixth value is the confidence score
+        rgb_color = get_class_color(class_id)
 
-        cv.rectangle(image, (x, y), (x + w, y + h), get_class_color(class_id), 2)
+
+        cv.rectangle(image, (x, y), (x + w, y + h), rgb_color, 2)
         # Optionally add text for class_id and score
-        cv.putText(image, f'ID: {get_class_name(class_id)}, Score: {score:.4f}', (x, y - 10), cv.FONT_HERSHEY_SIMPLEX, 0.5, get_class_color(class_id), 1)
+        cv.putText(image, f'ID: {get_class_name(class_id)}, Score: {score:.4f}', (x, y - 10), cv.FONT_HERSHEY_SIMPLEX, 0.5, rgb_color, 1)
 
-    # image = cv.resize(image, (1080, 1920))  # Resize the image to the target size if needed
-    
+
     return image  # Return the processed image
 
 
 
 def inpaint_yolo_results_yolo11(results):
     image = results[-1]  # The last item is the image
-
+    image = cv.resize(image, (640, 640))  # Resize the image to the target size if needed
     detection_count = len(results) - 1  # Exclude the last item which is the image
 
     for i in range(detection_count):
@@ -311,7 +306,7 @@ class VideoONNXWorker(QThread):
                     # Preprocess the frame for the model
                     preprocessed_frame = preprocess_image_yolo8(frame, 640) 
 
-                    print("output_image shape: ", output_image.shape)  # Debugging line
+                    # print("output_image shape: ", output_image.shape)  # Debugging line
                    
                     # Run the model inference
                     try:
