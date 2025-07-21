@@ -1,6 +1,8 @@
 from custom_widgets.camera_widget import CameraWidget
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget,QHBoxLayout,QAction
 from custom_widgets.mode_settings_editor import ModeSettingsEditor
+from custom_widgets.class_list_widget import ClassListWidget
+from utils import COCO_COLOR_LIST
 import sys
 
 class MainWindow(QMainWindow):
@@ -23,9 +25,12 @@ class MainWindow(QMainWindow):
         edit_menu.addAction(self.edit_model_settings_action)
  
         self.camera_widget = CameraWidget()
+        self.class_list_widget = ClassListWidget()  # Initialize ClassListWidget
+        self.class_list_widget.import_classes()  # Load classes if needed
 
         layout = QHBoxLayout()
         layout.addWidget(self.camera_widget)
+        layout.addWidget(self.class_list_widget)  # Add ClassListWidget to layout
 
         container = QWidget()
         container.setLayout(layout)
