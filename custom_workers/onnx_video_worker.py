@@ -73,6 +73,40 @@ def apply_nms_yolo8(boxes, scores, iou_threshold):
     
     return indices.flatten() if len(indices) > 0 else []
 
+
+def center_to_xyxy(box):
+    """
+    Convert bounding boxes from center format (x_center, y_center, width, height) to xyxy format (x1, y1, x2, y2).
+    boxes: array of shape (N, 4) where each row is [x_center, y_center, width, height]
+    """
+    x_center, y_center, width, height = box
+    x1 = x_center - width * 0.5
+    y1 = y_center - height * 0.5
+    x2 = x_center + width * 0.5
+    y2 = y_center + height * 0.5
+
+    return  np.array([x1, y1, x2, y2])
+
+
+def scale_box(box, input_shape, target_shape):
+    """
+    Scale a single bounding box from input_shape to target_shape.
+    box: [x1, y1, x2, y2]
+    input_shape: (input_h, input_w)
+    target_shape: (target_h, target_w)
+    """
+    input_h, input_w = input_shape
+    target_h, target_w = target_shape
+    scale_x = target_w / input_w
+    scale_y = target_h / input_h
+    x1, y1, x2, y2 = box
+    x1 = int(x1 * scale_x)
+    x2 = int(x2 * scale_x)
+    y1 = int(y1 * scale_y)
+    y2 = int(y2 * scale_y)
+    return [x1, y1, x2, y2]
+
+
 def postprocess_detections_yolo8(image,detections, class_confidence_threshold = 0.5, iou_threshold=0.4):
     """
     Postprocess the raw detections from the YOLO model.
@@ -95,34 +129,18 @@ def postprocess_detections_yolo8(image,detections, class_confidence_threshold = 
         confidence = scores[i][class_id]  # Get the confidence score for the class with the highest score
         
         if confidence >= class_confidence_threshold:
-        
-            x_center,y_center,w,h = boxes[i]
     
-            x1 = int(x_center - (0.5*w))
-            y1 = int(y_center - (0.5*h))
-            x2 = int(x_center + (0.5*w))
-            y2 = int(y_center + (0.5*h))
-    
-            normalized_boxes.append([x1, y1, x2, y2])  # Append the bounding box coordinates
+            normalized_boxes.append(center_to_xyxy(boxes[i]))  # Append the bounding box coordinates
             class_ids.append(class_id)
             confidence_scores.append(confidence)
 
-    # normalized_boxes = scale_boxes(normalized_boxes, (640, 640), (1080, 1920))  # Scale boxes to target shape
+
     #apply NMS to filter out overlapping boxes
     indices = apply_nms_yolo8(normalized_boxes, confidence_scores, iou_threshold)
 
-    og_size = (image.shape[1], image.shape[0])  # Original image size (height, width)
-    scale_factor_x = og_size[0] / 640
-    scale_factor_y = og_size[1] / 640
- 
     for i in indices:
-
         x1, y1, x2, y2 = map(int, normalized_boxes[i])
-        # Scale the bounding box coordinates back to the original image size
-        x1 = int(x1 * scale_factor_x)
-        y1 = int(y1 * scale_factor_y)
-        x2 = int(x2 * scale_factor_x)
-        y2 = int(y2 * scale_factor_y)
+        x1, y1, x2, y2 = scale_box([x1, y1, x2, y2], (640, 640), image.shape[:2])  # Scale the box to the original image size
 
         cv.rectangle(image, (x1, y1), (x2, y2), get_class_color(class_ids[i]), 2)
         cv.putText(image, f'ID: {get_class_name(class_ids[i])}, Score: {confidence_scores[i]:.4f}', 
@@ -131,55 +149,73 @@ def postprocess_detections_yolo8(image,detections, class_confidence_threshold = 
     # return the filtered detections
     return image
 
-def postprocess_detections_yolo11(detections, class_confidence_threshold=0.5, iou_threshold=0.4, num_classes=80, mask_dim=32):
-    preds, protos = detections
-    preds = np.squeeze(preds, axis=0)   # (N, 4+1+num_classes+mask_dim)
+
+
+def postprocess_detections_yolo11(image, preds, protos, class_confidence_threshold=0.5, iou_threshold=0.4, num_classes=80, mask_dim=32):
+    preds = np.squeeze(preds, axis=0)   # (N, 4+num_classes+mask_dim)
+    preds = preds.T # Transpose to (4+num_classes+mask_dim, N)
     protos = np.squeeze(protos, axis=0) # (mask_dim, mask_h, mask_w)
 
-    boxes = preds[:, :4]  # x_center, y_center, w, h
-    objectness = preds[:, 4]
-    class_scores = preds[:, 5:5+num_classes]
-    mask_vectors_all = preds[:, 5+num_classes:5+num_classes+mask_dim]
+    # 1. Split preds into boxes, class scores, mask coefficients
+    boxes = preds[:, :4]  # xyxy or xywh depending on model
+    scores = preds[:, 4:4+num_classes]  # class scores
+    mask_coeffs = preds[:, 4+num_classes:]  # mask coefficients
 
-    normalized_boxes = []
-    class_ids = []
-    confidence_scores = []
-    mask_vectors = []
-    results = []
-    protos_keepers = []
+    # 2. For each detection, get best class and confidence
+    class_ids = np.argmax(scores, axis=1)
+    confidences = np.max(scores, axis=1)
 
-    detection_count = preds.shape[0]
-    for i in range(detection_count):
-        # Get the class with the highest score
-        class_id = np.argmax(class_scores[i])
-        # print(f"Class ID: {class_id}, Objectness: {objectness[i]}, Class Scores: {class_scores[i]}")  # Debugging line
-        confidence = class_scores[i][class_id]
+    # 3. Filter by confidence threshold
+    keep = confidences > class_confidence_threshold
+    boxes = boxes[keep]
+    class_ids = class_ids[keep]
+    confidences = confidences[keep]
+    mask_coeffs = mask_coeffs[keep]
 
-        if confidence < class_confidence_threshold:
-            continue
 
-        x, y, w, h = boxes[i]
-        x1 = int(x - w / 2)
-        y1 = int(y - h / 2)
-        x2 = int(x + w / 2)
-        y2 = int(y + h / 2)
-        # print(f"Detection {i}: Box=({x1},{y1},{x2},{y2}), Class={class_id}, Confidence={confidence}")
-        normalized_boxes.append([x1, y1, x2, y2])  # Append the bounding box coordinates
-        class_ids.append(class_id)
-        confidence_scores.append(confidence)
-        mask_vectors.append(mask_vectors_all[i])
-        protos_keepers.append(protos)
-        # results.append([normalized_boxes[-1], confidence_scores[-1], class_ids[-1], mask_vectors[-1]])
+    # 5. (Optional) Apply NMS (implement or use OpenCV/NumPy NMS)
+    indices = apply_nms_yolo8(boxes, confidences, iou_threshold)
+    boxes, class_ids, confidences, mask_coeffs = boxes[indices], class_ids[indices], confidences[indices], mask_coeffs[indices]
 
-    normalized_boxes = scale_boxes(normalized_boxes, (640, 640), (1080, 1920))  # Scale boxes to target shape
-    # Apply NMS to filter out overlapping boxes
-    indices = apply_nms_yolo8(normalized_boxes, confidence_scores, iou_threshold)
+    # 6. Generate masks for each detection
+    masks = []
+    for coeff in mask_coeffs:
+        mask = np.tensordot(coeff, protos, axes=([0], [0]))  # shape: (mask_h, mask_w)
+        mask = 1 / (1 + np.exp(-mask))  # sigmoid
+        mask = cv.resize(mask, (image.shape[1], image.shape[0]))  # resize to image size
+        mask = (mask > 0.5).astype(np.uint8)  # threshold
+        masks.append(mask)
+    
 
-    # Return the filtered detections
-    for i in indices:
-        results.append([normalized_boxes[i], confidence_scores[i], class_ids[i], mask_vectors[i], protos_keepers[i]])
+    # 7. Draw boxes, labels, and masks on the image
+    for box, class_id, conf, mask in zip(boxes, class_ids, confidences, masks):
+        corner_box = center_to_xyxy(box)  # Convert to xyxy format if needed
+        x1, y1, x2, y2 = map(int, corner_box)
+        x1, y1, x2, y2 = scale_box([x1, y1, x2, y2], (640, 640), image.shape[:2])  # Scale the box to the original image size
 
-    return results # returns a list of detections in the format [[box, confidence, class_id, mask_vector, protos], ...]
+        contours, hierarchy = cv.findContours(mask, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+    
+        # get only the external countours based on the hierarchy
+        if hierarchy is not None:
+            contours = [cnt for cnt, h in zip(contours, hierarchy[0]) if h[3] == -1]  # Keep only external contours
+
+        bounding_boxes = [cv.boundingRect(cnt) for cnt in contours]
+        nms_boxes = cv.dnn.NMSBoxes(bounding_boxes, [conf] * len(bounding_boxes), class_confidence_threshold, iou_threshold)
+
+
+        color = get_class_color(class_id)
+
+        for i in nms_boxes:
+            (x, y, w, h) = bounding_boxes[i]
+            cv.rectangle(image, (x, y), (x + w, y + h), color, 4)
+            cv.putText(image, f'ID: {get_class_name(class_id)}, Score: {conf:.2f}', (x, y - 10), cv.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+       
+        # Overlay mask
+        colored_mask = np.zeros_like(image)
+        colored_mask[mask > 0] = color
+        image = cv.addWeighted(image, 1.0, colored_mask, 0.5, 0)
+
+    return image
 
 
 def inpaint_yolo_results_yolo8(results):
@@ -261,12 +297,14 @@ class VideoONNXWorker(QThread):
         self.iou_threshold = iou_threshold
         self.input_name = self.model.get_inputs()[0].name  # Get the input name of the model    
         self.valid_video_stream = False
-        
+        self.frame_number = 0
 
         self.capture = cv.VideoCapture(self.video_source)
         
         if self.capture.isOpened():
             self.valid_video_stream = True
+            self.fps = self.capture.get(cv.CAP_PROP_FPS)
+           
 
 
     def load_model(self, model_type):
@@ -317,16 +355,23 @@ class VideoONNXWorker(QThread):
                             output_image = postprocess_detections_yolo8(output_image,output, class_confidence_threshold=self.confidence_threshold,
                                                             iou_threshold=self.iou_threshold)
                         elif self.model_type == ModelType.YOLOY_11_S:
-                            output = self.model.run(None, {self.input_name: preprocessed_frame})
 
-                                                        
+                            output = self.model.run(None, {self.input_name: preprocessed_frame})
+                           
+                            preds, protos = output  # Assuming the model returns two outputs
+
+
+                            output_image = postprocess_detections_yolo11(output_image, preds, protos, class_confidence_threshold=self.confidence_threshold,
+                                                            iou_threshold=self.iou_threshold)
                             # write the output to a file for debugging
                             with open("output/yolo11_output.txt", "w") as f:
-                                f.write(str(output))
+                                f.write(str(output_image))
                             
                             
-                            detections = postprocess_detections_yolo11(output, class_confidence_threshold=self.confidence_threshold,
-                                                            iou_threshold=self.iou_threshold)
+                            # detections = postprocess_detections_yolo11(output, class_confidence_threshold=self.confidence_threshold,
+                            #                                 iou_threshold=self.iou_threshold)
+                            
+    
 
                         # Append the original image to the detections for display
                         # detections.append(output_image)  # Append the original image to the detections
@@ -336,7 +381,10 @@ class VideoONNXWorker(QThread):
 
                         # output_image = cv.resize(output_image, (1920, 1080))  # Resize the output image to fit the label
 
+                        self.prev = output_image.copy()  # Store the output image for paused state
+
                         qt_image = cv_image_to_qlabel(output_image)
+                        self.frame_number += 1
 
                         self.image.emit(qt_image)
                     except Exception as e:
@@ -349,7 +397,9 @@ class VideoONNXWorker(QThread):
             else:
                 # If paused, emit the previous frame
                 #convert the previous frame to QLabel format
-                output_image = cv_image_to_qlabel(self.prev) if self.prev is not None else QImage()
+                print("type(self.prev): ", type(self.prev))  # Debugging line
+
+                output_image = cv_image_to_qlabel(self.prev)
                 self.image.emit(output_image)
                 self.msleep(100)
 
