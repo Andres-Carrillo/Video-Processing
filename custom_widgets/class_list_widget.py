@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (QWidget,  QPushButton,QColorDialog,QInputDialog,QVBoxLayout,QListWidget,QMessageBox,QHBoxLayout, QListWidgetItem,QLabel)
 from PyQt5.QtCore import pyqtSignal
-from PyQt5.QtGui import QColor
+from PyQt5.QtGui import QColor, QFont
 from random import randint
 from utils import COCO_COLOR_LIST,COCO_CLASSES
 from custom_workers.onnx_video_worker import ModelType
@@ -8,7 +8,9 @@ from custom_workers.onnx_video_worker import ModelType
 class ClassItem(QWidget):
     def __init__(self, text, color, parent=None,row_index=0):
         super().__init__(parent)
-        self._class_name = text
+        #spacing to make text more readable
+        self._class_name = "        " + text
+
         self._color = color
    
         # Handle both QColor and tuple
@@ -24,14 +26,18 @@ class ClassItem(QWidget):
         layout.setSpacing(0)  # Remove spacing between widgets
         layout.setContentsMargins(0, 0, 0, 0)  #
         self.label = QLabel(text)
-        self.label.setFixedSize(90, 20)
+        # self.label.setFixedSize(90, 10)
+        self.label.setFixedWidth(105)
+        font = QFont()
+        font.setPointSize(12)
+        self.label.setFont(font)
 
         if row_index%2 == 0:
             self.label.setStyleSheet(f"background-color: rgba(232, 232, 232,175);")
 
         self.edit_button = QPushButton("")
 
-        self.edit_button.setFixedWidth(40)
+        self.edit_button.setFixedWidth(20)
         self.edit_button.setFixedHeight(20)
         self.edit_button.setStyleSheet(f"background-color: {rgba_str};")
  
@@ -49,6 +55,7 @@ class ClassListWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.init_ui()
+        self._item_count = 0
 
     def init_ui(self):
         layout = QVBoxLayout()
@@ -67,20 +74,22 @@ class ClassListWidget(QWidget):
             QWidget.sizePolicy(self).verticalPolicy()
         )
 
-        # self.setFixedSize(300, 400)  # Set a fixed size for the widget
         self.setFixedWidth(160)  # Set a fixed width for the widget
 
     def add_class(self):
         class_name, _ = QInputDialog.getText(self, "Class Name", "Enter Class Name")
         if not class_name:
             return
+
         init_color = QColor(randint(0,255), randint(0,255), randint(0,255), 175)
         item = QListWidgetItem()
-        widget = ClassItem(class_name, init_color)
+        widget = ClassItem(class_name, init_color, row_index=self._item_count)
+        widget.edit_button.clicked.connect(lambda _, item=item: self.item_clicked(item))
         item.setSizeHint(widget.sizeHint())
         self.list_widget.addItem(item)
         self.list_widget.setItemWidget(item, widget)
         self.class_added.emit(class_name, init_color)
+        self._item_count += 1
 
     def item_clicked(self, item):
         widget = self.list_widget.itemWidget(item)
@@ -90,10 +99,23 @@ class ClassListWidget(QWidget):
                 widget.label.setText(edit_class_name)
                 widget._class_name = edit_class_name
             color = QColorDialog.getColor()
+            
             if color.isValid():
                 widget.edit_button.setStyleSheet(f"background-color: {color.name()};")
                 widget._color = color
+
+            #safety check to ensure _color is a QColor
+            if not isinstance(widget._color, QColor):
+                QMessageBox.warning(self, "Invalid Color", "The selected color is not valid.")
+                return
+
+            
             self.class_edited.emit(widget._class_name, widget._color, self.list_widget.row(item))
+
+            class_id = COCO_CLASSES.index(widget._class_name) if widget._class_name in COCO_CLASSES else -1
+            if class_id != -1:
+                # update the color in COCO_COLOR_LIST
+                COCO_COLOR_LIST[class_id] = (color.red(), color.green(), color.blue())
 
     def remove_item(self, item):
         should_remove = QMessageBox(self)
@@ -116,3 +138,5 @@ class ClassListWidget(QWidget):
             item.setSizeHint(widget.sizeHint())
             self.list_widget.addItem(item)
             self.list_widget.setItemWidget(item, widget)
+            widget.edit_button.clicked.connect(lambda _, item=item: self.item_clicked(item))
+            self._item_count += 1
