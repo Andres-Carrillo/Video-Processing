@@ -74,6 +74,96 @@ def apply_nms_yolo8(boxes, scores, iou_threshold):
     return indices.flatten() if len(indices) > 0 else []
 
 
+
+def convert_top_left_box_to_xyxy(box):
+    """
+    Convert bounding boxes from top-left format (x1, y1, width, height) to xyxy format (x1, y1, x2, y2).
+    boxes: array of shape (N, 4) where each row is [x1, y1, width, height]
+    """
+    x1, y1, width, height = box
+    x2 = x1 + width
+    y2 = y1 + height
+
+    print("x1: ", x1, "y1: ", y1, "x2: ", x2, "y2: ", y2)  # Debugging line
+    return np.array([x1, y1, x2, y2])
+
+def apply_area_based_nms(boxes, scores, iou_threshold):
+    """"
+    Apply Non-Maximum Suppression (NMS) based on the area of the bounding boxes.
+    Sorting boxes by area and applying NMS. Inorder to merge enclosed boxes.
+    """
+
+    # Compute the area of each box the boxes are in xy width height format
+    areas = [box[2]  * box[3] for box in boxes]
+    print("areas: ", areas)  # Debugging line
+    # Sort boxes by area (largest first)    
+    sorted_indices = np.argsort(areas)[::-1]
+    print("sorted_indices: ", sorted_indices)  # Debugging line
+
+    sorted_boxes = [boxes[i] for i in sorted_indices]
+    print("sorted_boxes: ", sorted_boxes)  # Debugging line
+    sorted_scores = [scores[i] for i in sorted_indices]
+    print("sorted_scores: ", sorted_scores)  # Debugging line
+
+    keep = []
+
+    for i,temp_sorted in enumerate(sorted_boxes):
+        print("i: ", i)  # Debugging line
+
+        if len(keep) == 0:
+            temp_sorted = convert_top_left_box_to_xyxy(temp_sorted)
+            keep.append(temp_sorted)
+            continue
+        
+        #  for every box in keep, check if it overlaps the current box
+        # if so then merge the boxes and replace the box in keep with the merged box
+        print("temp_sorted: ", temp_sorted)  # Debugging line
+
+        for j, temp_keep in enumerate(keep):
+            print("temp_keep: ", temp_keep)  # Debugging line
+
+            temp_area = (temp_sorted[2] * temp_sorted[3])
+            keep_area = (temp_keep[2] - temp_keep[0]) * (temp_keep[3] - temp_keep[1] + 1)
+
+            area_of_union = temp_area + keep_area
+
+            print("area_of_union: ", area_of_union)  # Debugging line
+            print("temp area: ", temp_area)  # Debugging line
+            print("keep area: ", keep_area)  # Debugging line
+            
+            converted_temp = convert_top_left_box_to_xyxy(temp_sorted)
+            converted_keep = convert_top_left_box_to_xyxy(temp_keep)
+            # find the intersection box
+            x1 = max(converted_temp[0], converted_keep[0])
+            y1 = max(converted_temp[1], converted_keep[1])
+            x2 = min(converted_temp[2], converted_keep[2])
+            y2 = min(converted_temp[3], converted_keep[3])
+
+            intersection_area = max(0, x2 - x1 + 1) * max(0, y2 - y1 + 1)
+
+
+            iou = intersection_area / (area_of_union - intersection_area) if area_of_union - intersection_area > 0 else 0
+
+
+            if iou > iou_threshold:
+                # Merge the boxes by taking the min and max coordinates
+                merged_box = [
+                    min(temp_sorted[0], temp_keep[0]),
+                    min(temp_sorted[1], temp_keep[1]),
+                    max(temp_sorted[2], temp_keep[2]),
+                    max(temp_sorted[3], temp_keep[3])
+                ]
+
+                keep[j] = merged_box
+                break
+
+        else:
+            # If no overlap was found, add the current box to keep
+            keep.append(sorted_boxes[i])
+
+        return  keep
+
+
 def center_to_xyxy(box):
     """
     Convert bounding boxes from center format (x_center, y_center, width, height) to xyxy format (x1, y1, x2, y2).
@@ -149,7 +239,45 @@ def postprocess_detections_yolo8(image,detections, class_confidence_threshold = 
     # return the filtered detections
     return image
 
+# def postprocess_detections_yolo11(image, preds, protos, class_confidence_threshold=0.5, iou_threshold=0.4, num_classes=1, mask_dim=32):
+#     preds = np.squeeze(preds, axis=0)   # (N, 4+num_classes+mask_dim)
+#     protos = np.squeeze(protos, axis=0) # (mask_dim, mask_h, mask_w)
 
+#     boxes = preds[:, :4]  # (N, 4)
+#     scores = preds[:, 4:4+num_classes]  # (N, num_classes)
+#     mask_coeffs = preds[:, -mask_dim:]  # (N, mask_dim)
+
+#     class_ids = np.argmax(scores, axis=1)
+#     confidences = np.max(scores, axis=1)
+
+#     keep = confidences > class_confidence_threshold
+#     boxes = boxes[keep]
+#     class_ids = class_ids[keep]
+#     confidences = confidences[keep]
+#     mask_coeffs = mask_coeffs[keep]
+
+#     # Convert boxes if needed
+#     boxes = np.array([center_to_xyxy(box) for box in boxes])
+
+#     masks = []
+#     for coeff in mask_coeffs:
+#         mask = np.tensordot(coeff, protos, axes=([0], [0]))
+#         mask = 1 / (1 + np.exp(-mask))
+#         mask = cv.resize(mask, (image.shape[1], image.shape[0]))
+#         mask = (mask > 0.5).astype(np.uint8)
+#         masks.append(mask)
+
+#     for box, class_id, conf, mask in zip(boxes, class_ids, confidences, masks):
+#         x1, y1, x2, y2 = map(int, box)
+#         x1, y1, x2, y2 = scale_box([x1, y1, x2, y2], (640, 640), image.shape[:2])
+#         color = get_class_color(class_id)
+#         cv.rectangle(image, (x1, y1), (x2, y2), color, 2)
+#         cv.putText(image, f'ID: {get_class_name(class_id)}, Score: {conf:.2f}', (x1, y1 - 10), cv.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+#         colored_mask = np.zeros_like(image)
+#         colored_mask[mask > 0] = color
+#         image = cv.addWeighted(image, 1.0, colored_mask, 0.3, 0)
+
+#     return image
 
 def postprocess_detections_yolo11(image, preds, protos, class_confidence_threshold=0.5, iou_threshold=0.4, num_classes=80, mask_dim=32):
     preds = np.squeeze(preds, axis=0)   # (N, 4+num_classes+mask_dim)
@@ -159,7 +287,10 @@ def postprocess_detections_yolo11(image, preds, protos, class_confidence_thresho
     # 1. Split preds into boxes, class scores, mask coefficients
     boxes = preds[:, :4]  # xyxy or xywh depending on model
     scores = preds[:, 4:4+num_classes]  # class scores
-    mask_coeffs = preds[:, 4+num_classes:]  # mask coefficients
+    mask_dim = protos.shape[0]
+    mask_coeffs = preds[:, -mask_dim:] # mask coefficients 
+
+
 
     # 2. For each detection, get best class and confidence
     class_ids = np.argmax(scores, axis=1)
@@ -173,9 +304,9 @@ def postprocess_detections_yolo11(image, preds, protos, class_confidence_thresho
     mask_coeffs = mask_coeffs[keep]
 
 
-    # 5. (Optional) Apply NMS (implement or use OpenCV/NumPy NMS)
-    indices = apply_nms_yolo8(boxes, confidences, iou_threshold)
-    boxes, class_ids, confidences, mask_coeffs = boxes[indices], class_ids[indices], confidences[indices], mask_coeffs[indices]
+    # # 5. (Optional) Apply NMS (implement or use OpenCV/NumPy NMS)
+    # indices = apply_nms_yolo8(boxes, confidences, iou_threshold)
+    # boxes, class_ids, confidences, mask_coeffs = boxes[indices], class_ids[indices], confidences[indices], mask_coeffs[indices]
 
     # 6. Generate masks for each detection
     masks = []
@@ -185,13 +316,39 @@ def postprocess_detections_yolo11(image, preds, protos, class_confidence_thresho
         mask = cv.resize(mask, (image.shape[1], image.shape[0]))  # resize to image size
         mask = (mask > 0.5).astype(np.uint8)  # threshold
         masks.append(mask)
-    
+
+
+    filtered_boxes = []
+    filtered_class_ids = []
+    filtered_confidences = []
+    filtered_masks = []
+    class_masks = {}
+
+    detections = {}
+
+
+    # group detections
+    detections = zip(boxes, class_ids, confidences, masks)
+
+    #sort detection by class id
+    class_sort = sorted(detections, key=lambda x: x[1])  # Sort by class_id
+
+
+    #iterate through sorted detections,
+    # and bitwise or the masks of the same class
+    # then find bounding boxes for masks based on contours
+    # then apply nms of class bounding boxes
+    # and draw the boxes, labels, and masks on the image
+
+    # 6. Create a dictionary to hold masks for each class
 
     # 7. Draw boxes, labels, and masks on the image
-    for box, class_id, conf, mask in zip(boxes, class_ids, confidences, masks):
-        corner_box = center_to_xyxy(box)  # Convert to xyxy format if needed
-        x1, y1, x2, y2 = map(int, corner_box)
-        x1, y1, x2, y2 = scale_box([x1, y1, x2, y2], (640, 640), image.shape[:2])  # Scale the box to the original image size
+    for box, class_id, conf, mask in class_sort:
+
+        if class_id not in class_masks.keys():
+            class_masks[class_id] = np.zeros_like(image, dtype=np.uint8)
+
+        class_masks[class_id] = cv.add(class_masks[class_id], mask)
 
         contours, hierarchy = cv.findContours(mask, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
     
@@ -200,20 +357,25 @@ def postprocess_detections_yolo11(image, preds, protos, class_confidence_thresho
             contours = [cnt for cnt, h in zip(contours, hierarchy[0]) if h[3] == -1]  # Keep only external contours
 
         bounding_boxes = [cv.boundingRect(cnt) for cnt in contours]
-        nms_boxes = cv.dnn.NMSBoxes(bounding_boxes, [conf] * len(bounding_boxes), class_confidence_threshold, iou_threshold)
+
+        nms_boxes_indices = cv.dnn.NMSBoxes(bounding_boxes, [conf] * len(bounding_boxes), class_confidence_threshold, iou_threshold, top_k=5)
+
+        nms_boxes = bounding_boxes#[bounding_boxes[i] for i in nms_boxes_indices.flatten()] if nms_boxes_indices is not None else []
 
 
         color = get_class_color(class_id)
 
-        for i in nms_boxes:
-            (x, y, w, h) = bounding_boxes[i]
+        for box in nms_boxes:
+            (x, y, w, h) = box
             cv.rectangle(image, (x, y), (x + w, y + h), color, 4)
             cv.putText(image, f'ID: {get_class_name(class_id)}, Score: {conf:.2f}', (x, y - 10), cv.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+            
+
        
         # Overlay mask
         colored_mask = np.zeros_like(image)
         colored_mask[mask > 0] = color
-        image = cv.addWeighted(image, 1.0, colored_mask, 0.5, 0)
+        image = cv.addWeighted(image, 1.0, colored_mask, 0.1, 0)
 
     return image
 
@@ -357,6 +519,8 @@ class VideoONNXWorker(QThread):
                         elif self.model_type == ModelType.YOLOY_11_S:
 
                             output = self.model.run(None, {self.input_name: preprocessed_frame})
+
+                            # print("output: ", output)  # Debugging line
                            
                             preds, protos = output  # Assuming the model returns two outputs
 
