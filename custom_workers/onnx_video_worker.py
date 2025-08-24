@@ -9,6 +9,8 @@ import numpy as np
 providers = ort.get_available_providers()
 
 
+
+
 def scale_boxes(boxes, input_shape, target_shape):
     """
     Scale bounding boxes from input_shape to target_shape.
@@ -84,7 +86,6 @@ def convert_top_left_box_to_xyxy(box):
     x2 = x1 + width
     y2 = y1 + height
 
-    print("x1: ", x1, "y1: ", y1, "x2: ", x2, "y2: ", y2)  # Debugging line
     return np.array([x1, y1, x2, y2])
 
 def apply_area_based_nms(boxes, scores, iou_threshold):
@@ -95,18 +96,13 @@ def apply_area_based_nms(boxes, scores, iou_threshold):
 
     # Compute the area of each box the boxes are in xy width height format
     areas = [box[2]  * box[3] for box in boxes]
-    print("areas: ", areas)  # Debugging line
     # Sort boxes by area (largest first)    
     sorted_indices = np.argsort(areas)[::-1]
-    print("sorted_indices: ", sorted_indices)  # Debugging line
-
     sorted_boxes = [boxes[i] for i in sorted_indices]
-    print("sorted_boxes: ", sorted_boxes)  # Debugging line
     sorted_scores = [scores[i] for i in sorted_indices]
-    print("sorted_scores: ", sorted_scores)  # Debugging line
+
 
     keep = []
-
     for i,temp_sorted in enumerate(sorted_boxes):
         print("i: ", i)  # Debugging line
 
@@ -115,24 +111,15 @@ def apply_area_based_nms(boxes, scores, iou_threshold):
             keep.append(temp_sorted)
             continue
         
-        #  for every box in keep, check if it overlaps the current box
-        # if so then merge the boxes and replace the box in keep with the merged box
-        print("temp_sorted: ", temp_sorted)  # Debugging line
-
         for j, temp_keep in enumerate(keep):
-            print("temp_keep: ", temp_keep)  # Debugging line
-
             temp_area = (temp_sorted[2] * temp_sorted[3])
             keep_area = (temp_keep[2] - temp_keep[0]) * (temp_keep[3] - temp_keep[1] + 1)
 
             area_of_union = temp_area + keep_area
-
-            print("area_of_union: ", area_of_union)  # Debugging line
-            print("temp area: ", temp_area)  # Debugging line
-            print("keep area: ", keep_area)  # Debugging line
-            
+    
             converted_temp = convert_top_left_box_to_xyxy(temp_sorted)
             converted_keep = convert_top_left_box_to_xyxy(temp_keep)
+
             # find the intersection box
             x1 = max(converted_temp[0], converted_keep[0])
             y1 = max(converted_temp[1], converted_keep[1])
@@ -197,10 +184,12 @@ def scale_box(box, input_shape, target_shape):
     return [x1, y1, x2, y2]
 
 
-def postprocess_detections_yolo8(image,detections, class_confidence_threshold = 0.5, iou_threshold=0.4):
+def postprocess_detections_yolo8(detections, class_confidence_threshold = 0.5, iou_threshold=0.4):
     """
     Postprocess the raw detections from the YOLO model.
     """
+
+    print("ouput from detection model: ", detections.shape)  # Debugging line
    
     boxes = detections[:4, :].T # Assuming the first 4 rows are x_center, y_center, width, height
 
@@ -228,56 +217,24 @@ def postprocess_detections_yolo8(image,detections, class_confidence_threshold = 
     #apply NMS to filter out overlapping boxes
     indices = apply_nms_yolo8(normalized_boxes, confidence_scores, iou_threshold)
 
-    for i in indices:
-        x1, y1, x2, y2 = map(int, normalized_boxes[i])
+
+    # return the filtered detections
+    return [[normalized_boxes[i], confidence_scores[i], class_ids[i]] for i in indices]
+
+
+
+def inpant_yolo8_detections(image, results):
+    for box, score, class_id in results:
+        x1, y1, x2, y2 = map(int, box)
         x1, y1, x2, y2 = scale_box([x1, y1, x2, y2], (640, 640), image.shape[:2])  # Scale the box to the original image size
 
-        cv.rectangle(image, (x1, y1), (x2, y2), get_class_color(class_ids[i]), 2)
-        cv.putText(image, f'ID: {get_class_name(class_ids[i])}, Score: {confidence_scores[i]:.4f}', 
-                   (x1, y1 - 10), cv.FONT_HERSHEY_SIMPLEX, 0.5, get_class_color(class_ids[i]), 1)
-    
+        cv.rectangle(image, (x1, y1), (x2, y2), get_class_color(class_id), 2)
+        cv.putText(image, f'ID: {get_class_name(class_id)}, Score: {score:.4f}',
+                   (x1, y1 - 10), cv.FONT_HERSHEY_SIMPLEX, 0.5, get_class_color(class_id), 1)
+
     # return the filtered detections
     return image
 
-# def postprocess_detections_yolo11(image, preds, protos, class_confidence_threshold=0.5, iou_threshold=0.4, num_classes=1, mask_dim=32):
-#     preds = np.squeeze(preds, axis=0)   # (N, 4+num_classes+mask_dim)
-#     protos = np.squeeze(protos, axis=0) # (mask_dim, mask_h, mask_w)
-
-#     boxes = preds[:, :4]  # (N, 4)
-#     scores = preds[:, 4:4+num_classes]  # (N, num_classes)
-#     mask_coeffs = preds[:, -mask_dim:]  # (N, mask_dim)
-
-#     class_ids = np.argmax(scores, axis=1)
-#     confidences = np.max(scores, axis=1)
-
-#     keep = confidences > class_confidence_threshold
-#     boxes = boxes[keep]
-#     class_ids = class_ids[keep]
-#     confidences = confidences[keep]
-#     mask_coeffs = mask_coeffs[keep]
-
-#     # Convert boxes if needed
-#     boxes = np.array([center_to_xyxy(box) for box in boxes])
-
-#     masks = []
-#     for coeff in mask_coeffs:
-#         mask = np.tensordot(coeff, protos, axes=([0], [0]))
-#         mask = 1 / (1 + np.exp(-mask))
-#         mask = cv.resize(mask, (image.shape[1], image.shape[0]))
-#         mask = (mask > 0.5).astype(np.uint8)
-#         masks.append(mask)
-
-#     for box, class_id, conf, mask in zip(boxes, class_ids, confidences, masks):
-#         x1, y1, x2, y2 = map(int, box)
-#         x1, y1, x2, y2 = scale_box([x1, y1, x2, y2], (640, 640), image.shape[:2])
-#         color = get_class_color(class_id)
-#         cv.rectangle(image, (x1, y1), (x2, y2), color, 2)
-#         cv.putText(image, f'ID: {get_class_name(class_id)}, Score: {conf:.2f}', (x1, y1 - 10), cv.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-#         colored_mask = np.zeros_like(image)
-#         colored_mask[mask > 0] = color
-#         image = cv.addWeighted(image, 1.0, colored_mask, 0.3, 0)
-
-#     return image
 
 def postprocess_detections_yolo11(image, preds, protos, class_confidence_threshold=0.5, iou_threshold=0.4, num_classes=80, mask_dim=32):
     preds = np.squeeze(preds, axis=0)   # (N, 4+num_classes+mask_dim)
@@ -436,6 +393,16 @@ class ModelType(enum.Enum):
     YOLO_8_D = "model_zoo/best.onnx"
     YOLOY_11_S = "model_zoo/yolo11n-seg.onnx"
 
+
+
+
+class VideoPlaybackState(enum.Enum):
+    PAUSED = 1
+    PLAYING = 2
+    SINGLE_FRAME = 3
+    EXPORTING_RESULTS = 4
+    STOPPED = 5
+
 class VideoONNXWorker(QThread):
     image = pyqtSignal(QImage)
 
@@ -462,6 +429,8 @@ class VideoONNXWorker(QThread):
         self.frame_number = 0
 
         self.capture = cv.VideoCapture(self.video_source)
+
+        self.state = VideoPlaybackState.STOPPED
         
         if self.capture.isOpened():
             self.valid_video_stream = True
@@ -481,11 +450,12 @@ class VideoONNXWorker(QThread):
 
     def run(self):
         self.running = True
+        self.state = VideoPlaybackState.PLAYING
         prev_time = time.time()
 
-        while self.running:
+        while self.running and self.state != VideoPlaybackState.STOPPED:
             
-            if not self.paused:
+            if not self.paused and self.state != VideoPlaybackState.PAUSED:
                 start = time.perf_counter()
                 # FPS limiting logic
                 if self.limited_fps and self.fps > 0:
@@ -512,10 +482,15 @@ class VideoONNXWorker(QThread):
                     try:
 
                         if self.model_type == ModelType.YOLO_8_D:
+                            # extract the output from the model
                             output = self.model.run(None, {self.input_name: preprocessed_frame})[0]
                             output = np.squeeze(output)  # Remove batch dimension
-                            output_image = postprocess_detections_yolo8(output_image,output, class_confidence_threshold=self.confidence_threshold,
-                                                            iou_threshold=self.iou_threshold)
+                            
+                            # process the output
+                            yolo_results = postprocess_detections_yolo8(output, class_confidence_threshold=self.confidence_threshold,iou_threshold=self.iou_threshold)
+                            # inpaint the detections on the output image
+                            output_image = inpant_yolo8_detections(output_image, yolo_results)
+
                         elif self.model_type == ModelType.YOLOY_11_S:
 
                             output = self.model.run(None, {self.input_name: preprocessed_frame})
@@ -527,23 +502,7 @@ class VideoONNXWorker(QThread):
 
                             output_image = postprocess_detections_yolo11(output_image, preds, protos, class_confidence_threshold=self.confidence_threshold,
                                                             iou_threshold=self.iou_threshold)
-                            # write the output to a file for debugging
-                            with open("output/yolo11_output.txt", "w") as f:
-                                f.write(str(output_image))
-                            
-                            
-                            # detections = postprocess_detections_yolo11(output, class_confidence_threshold=self.confidence_threshold,
-                            #                                 iou_threshold=self.iou_threshold)
-                            
-    
 
-                        # Append the original image to the detections for display
-                        # detections.append(output_image)  # Append the original image to the detections
-
-                        # draw the detections on the output image
-                        # output_image = inpaint_yolo_results_yolo8(detections)
-
-                        # output_image = cv.resize(output_image, (1920, 1080))  # Resize the output image to fit the label
 
                         self.prev = output_image.copy()  # Store the output image for paused state
 
@@ -588,7 +547,12 @@ class VideoONNXWorker(QThread):
         self.paused = False
 
     def toggle_single_frame_mode(self, enable):
-        self.single_frame_mode = enable
+        if self.running:
+            self.single_frame_mode = enable
+
+            if enable:
+                self.state = VideoPlaybackState.SINGLE_FRAME
+                
 
     def set_video_sorce(self, video_path):
         if self.running:
