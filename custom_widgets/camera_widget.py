@@ -88,13 +88,13 @@ class CameraWidget(QWidget):
         elif mode == CameraFeedMode.SINGLE_FRAME_CAPTURE:
             self.play_button.setVisible(False)
             self.forward_button.setVisible(True)
-            self.backward_button.setVisible(True)
+            # self.backward_button.setVisible(True)
             self.camera_worker.toggle_single_frame_mode(True)  # Toggle single frame mode in the worker
 
     def start(self):
         if self.camera_worker.valid_video_stream:
             self.camera_worker.start()
-            CameraWidget.running = True
+            
             self._set_pause_icon()
         else:
             self.get_file_from_user()  # If no valid video stream, try to update the video source
@@ -193,6 +193,9 @@ class CameraWidget(QWidget):
             self.camera_worker.resume()
 
         self._set_pause_icon()
+
+    def single_frame_mode(self, enable):
+        self.camera_worker.toggle_single_frame_mode(enable)
 
     def _set_pause_icon(self):
         self.play_button.setIcon(QIcon("../icons/pause-1006-svgrepo-com.svg"))
