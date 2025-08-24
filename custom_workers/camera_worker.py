@@ -12,6 +12,14 @@ class CameraFeedMode(enum.Enum):
     REAL_TIME_PROCESSING = 2
 
 
+
+class VideoPlaybackState(enum.Enum):
+    PAUSED = 1
+    PLAYING = 2
+    SINGLE_FRAME = 3
+    STOPPED = 4
+
+
 class CameraWorker(QThread):
     image = pyqtSignal(QImage)
 
@@ -27,21 +35,29 @@ class CameraWorker(QThread):
         self.single_frame_mode = False
         self.prev = None  # To store the previous frame for paused state
 
-        if camera_mode == CameraFeedMode.REAL_TIME_PROCESSING and video_path is not None:
+        self.camera_state = camera_mode
+        self.widget_state = VideoPlaybackState.STOPPED
+
+        if self.camera_state == CameraFeedMode.REAL_TIME_PROCESSING and video_path is not None:
             self.capture = cv.VideoCapture(video_path)
         else:
             self.capture = cv.VideoCapture(self.camera_index)
-            if camera_mode == CameraFeedMode.SINGLE_FRAME_CAPTURE:
+            if self.camera_state == CameraFeedMode.SINGLE_FRAME_CAPTURE:
                 self.single_frame_mode = True
 
     def run(self):
+        self.widget_state = VideoPlaybackState.PLAYING
         self.running = True
         prev_time = time.time()
+        frame_number = 0
 
-        while self.running:
-            
-            if not self.paused:
-                start = time.perf_counter()
+        while self.widget_state != VideoPlaybackState.STOPPED and self.running:
+
+            if self.widget_state.value != VideoPlaybackState.PAUSED.value: # normal live feed mode
+                if self.single_frame_mode and frame_number > 0:
+                    self.msleep(100)
+                    continue  # skip to the next iteration without reading a new frame
+                frame_number += 1
                 # FPS limiting logic
                 if self.limited_fps and self.fps > 0:
                     current_time = time.time()
@@ -56,10 +72,10 @@ class CameraWorker(QThread):
                 if ret:
                     self.prev = qt_image = cv_image_to_qlabel(frame)
                     self.image.emit(qt_image)
-                    end = time.perf_counter()
+                  
                 else:
                     break
-            else:
+            else: # paused state, just re-emit the previous frame
                 self.image.emit(self.prev)
                 self.msleep(100)
 
